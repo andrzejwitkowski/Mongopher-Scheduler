@@ -10,24 +10,28 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/mongo/readconcern"
 	"go.mongodb.org/mongo-driver/mongo/readpref"
+	"go.mongodb.org/mongo-driver/mongo/writeconcern"
 )
 
 func main() {
-    // Use a direct connection to the NodePort
-    connectionURI := "mongodb://root:example@localhost:30017/?directConnection=true&authSource=admin"
+	connectionURI := "mongodb://root:example@localhost:30017"
     
-    clientOptions := options.Client().
-        ApplyURI(connectionURI).
-        SetAuth(options.Credential{
-            Username: "root",
-            Password: "example",
-            AuthSource: "admin",
-        }).
-        SetServerSelectionTimeout(10 * time.Second).
-        SetConnectTimeout(10 * time.Second).
-        SetDirect(true)  // Force direct connection
-
+	clientOptions := options.Client().
+		ApplyURI(connectionURI).
+		SetAuth(options.Credential{
+			Username: "root",
+			Password: "example",
+			AuthSource: "admin",
+		}).
+		SetServerSelectionTimeout(10 * time.Second).
+		SetConnectTimeout(10 * time.Second).
+		SetDirect(true).
+		SetWriteConcern(writeconcern.Majority()).
+		SetReadPreference(readpref.Primary()).
+		SetReadConcern(readconcern.Local())
+	
     ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
     defer cancel()
 
@@ -74,6 +78,19 @@ func main() {
 		return nil
 	})
 
+	// Register recoverable task handler
+	scheduler.RegisterHandler("recoverable_task", func(task *task_scheduler.Task) error {
+		fmt.Printf("Processing recoverable task %s (attempt %d/%d)\n", 
+			task.ID.Hex(), task.RetryConfig.Attempts+1, task.RetryConfig.MaxRetries)
+		time.Sleep(1 * time.Second)
+		
+		// Fail first 3 attempts, then succeed
+		if task.RetryConfig.Attempts < 3 {
+			return fmt.Errorf("simulated failure (attempt %d)", task.RetryConfig.Attempts+1)
+		}
+		return nil
+	})
+
 	// Start the scheduler
 	scheduler_ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -82,6 +99,13 @@ func main() {
 	// Register some sample tasks
 	for i := 0; i < 5; i++ {
 		_, err := scheduler.RegisterTask("sample_task", bson.M{"index": i}, nil)
+		if err != nil {
+			log.Println("Failed to register task:", err)
+		}
+	}
+
+	for i := 0; i < 5; i++ {
+		_, err := scheduler.RegisterTask("recoverable_task", bson.M{"recoverable_index": i}, nil)
 		if err != nil {
 			log.Println("Failed to register task:", err)
 		}

@@ -7,10 +7,11 @@ import (
 	"sync"
 	"time"
 
+	"mongopher-scheduler/retry"
+
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
-	"mongopher-scheduler/retry"
 )
 
 type TaskStatus string
@@ -163,18 +164,24 @@ func (ts *TaskScheduler) processTasks(ctx context.Context) {
 		log.Printf("Error decoding tasks: %v", err)
 		return
 	}
-
-	// Process each task
+	
+	// Mark all tasks as IN_PROGRESS synchronously
 	for _, task := range tasks {
-		// Update status to IN_PROGRESS
+		log.Printf("Attempting to mark task %s (current status: %s) as IN_PROGRESS", 
+			task.ID.Hex(), task.Status)
 		if err := ts.updateTaskState(ctx, task.ID, StatusInProgress, "", 0, nil); err != nil {
 			log.Printf("Error updating task status: %v", err)
 			continue
 		}
-
-		// Process task with retry logic
-		ts.processTaskWithRetry(ctx, task)
 	}
+
+
+    // Launch processing without waiting
+    for _, task := range tasks {
+        go func(t Task) {
+            ts.processTaskWithRetry(ctx, task)
+        }(task)
+    }
 }
 
 func (ts *TaskScheduler) processTaskWithRetry(ctx context.Context, task Task) {
@@ -185,6 +192,10 @@ func (ts *TaskScheduler) processTaskWithRetry(ctx context.Context, task Task) {
 	}
 
 	for task.RetryConfig.Attempts <= task.RetryConfig.MaxRetries {
+		if err := ts.updateTaskState(ctx, task.ID, StatusInProgress, "", task.RetryConfig.Attempts, nil); err != nil {
+            log.Printf("Error marking task as IN_PROGRESS: %v", err)
+            return
+        }
 		err := handler(&task)
 		if err == nil {
 			ts.updateTaskState(ctx, task.ID, StatusDone, "", task.RetryConfig.Attempts, nil)
@@ -206,25 +217,49 @@ func (ts *TaskScheduler) processTaskWithRetry(ctx context.Context, task Task) {
 	ts.updateTaskState(ctx, task.ID, StatusException, "Max retries exceeded", task.RetryConfig.Attempts, nil)
 }
 
-func (ts *TaskScheduler) updateTaskState(ctx context.Context, id primitive.ObjectID, status TaskStatus, errorMsg string, retryAttempts int, scheduledAt *time.Time) error {
-	historyEntry := TaskHistory{
-		Status:    status,
-		Timestamp: time.Now(),
-		Error:     errorMsg,
-	}
+func (ts *TaskScheduler) updateTaskState(
+    ctx context.Context, 
+    id primitive.ObjectID, 
+    status TaskStatus, 
+    errorMsg string, 
+    retryAttempts int, 
+    scheduledAt *time.Time) error {
 
-	update := bson.M{
-		"$set": bson.M{
-			"status": status,
-			"retry_config.attempts": retryAttempts,
-		},
-		"$push": bson.M{"history": historyEntry},
-	}
+    log.Printf("Attempting to update task %s from status to %s", id.Hex(), status)
 
-	if scheduledAt != nil {
-		update["$set"].(bson.M)["scheduled_at"] = *scheduledAt
-	}
+    maxRetries := 10
+    var lastErr error
 
-	_, err := ts.collection.UpdateByID(ctx, id, update)
-	return err
+    for i := 0; i < maxRetries; i++ {
+        historyEntry := TaskHistory{
+            Status:    status,
+            Timestamp: time.Now(),
+            Error:     errorMsg,
+        }
+
+        update := bson.M{
+            "$set": bson.M{
+                "status": status,
+                "retry_config.attempts": retryAttempts,
+            },
+            "$push": bson.M{"history": historyEntry},
+        }
+
+        if scheduledAt != nil {
+            update["$set"].(bson.M)["scheduled_at"] = *scheduledAt
+        }
+
+        result, err := ts.collection.UpdateByID(ctx, id, update)
+        if err == nil {
+            log.Printf("Successfully updated task %s to status %s. Modified count: %d", 
+                id.Hex(), status, result.ModifiedCount)
+            return nil
+        }
+
+        log.Printf("Failed attempt %d to update task %s: %v", i+1, id.Hex(), err)
+        lastErr = err
+        time.Sleep(time.Duration(100*(i+1)) * time.Millisecond)
+    }
+
+    return fmt.Errorf("failed to update task state after %d retries: %v", maxRetries, lastErr)
 }
