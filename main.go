@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"mongopher-scheduler/task_scheduler"
+	scheduler "mongopher-scheduler/task_scheduler/scheduler/mongo"
+	"mongopher-scheduler/task_scheduler/shared"
+	"mongopher-scheduler/task_scheduler/store"
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -53,35 +55,26 @@ func main() {
         }
     }()
 
-	// Clean tasks collection
 	collection := client.Database("task_scheduler").Collection("tasks")
 	_, err = collection.DeleteMany(context.Background(), bson.M{})
 	if err != nil {
 		log.Fatal("Failed to clean tasks collection:", err)
 	}
 
-	// Create task scheduler instance
-	scheduler, err := task_scheduler.NewTaskScheduler(client, "task_scheduler")
-	if err != nil {
-		log.Fatal(err)
-	}
+	task_scheduler := scheduler.NewMongoTaskScheduler(client, "task_scheduler")
 
 	// Register a sample task handler
-	scheduler.RegisterHandler("sample_task", func(task *task_scheduler.Task) error {
+	task_scheduler.RegisterHandler("sample_task", func(task *store.Task) error {
 		fmt.Println("Processing task:", task.ID)
 		// Simulate work
 		time.Sleep(2 * time.Second)
-		// Simulate random success/failure
-		if time.Now().Unix()%2 == 0 {
-			return fmt.Errorf("simulated error")
-		}
 		return nil
 	})
 
 	// Register recoverable task handler
-	scheduler.RegisterHandler("recoverable_task", func(task *task_scheduler.Task) error {
-		fmt.Printf("Processing recoverable task %s (attempt %d/%d)\n", 
-			task.ID.Hex(), task.RetryConfig.Attempts+1, task.RetryConfig.MaxRetries)
+	task_scheduler.RegisterHandler("recoverable_task", func(task *store.Task) error {
+		fmt.Printf("{Goroutine: %d} Processing recoverable task %s (attempt %d/%d)\n", 
+			shared.GoroutineID(), task.ID.Hex(), task.RetryConfig.Attempts+1, task.RetryConfig.MaxRetries)
 		time.Sleep(1 * time.Second)
 		
 		// Fail first 3 attempts, then succeed
@@ -94,18 +87,19 @@ func main() {
 	// Start the scheduler
 	scheduler_ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	scheduler.StartScheduler(scheduler_ctx)
+	task_scheduler.StartScheduler(scheduler_ctx)
+
 
 	// Register some sample tasks
-	for i := 0; i < 5; i++ {
-		_, err := scheduler.RegisterTask("sample_task", bson.M{"index": i}, nil)
-		if err != nil {
-			log.Println("Failed to register task:", err)
-		}
-	}
+	// for i := 0; i < 5; i++ {
+	// 	_, err := task_scheduler.RegisterTask("sample_task", scheduler.NewBSONParameter(bson.M{"index": i}), nil)
+	// 	if err != nil {
+	// 		log.Println("Failed to register task:", err)
+	// 	}
+	// }
 
-	for i := 0; i < 5; i++ {
-		_, err := scheduler.RegisterTask("recoverable_task", bson.M{"recoverable_index": i}, nil)
+	for i := 0; i < 1; i++ {
+		_, err := task_scheduler.RegisterTask("recoverable_task", scheduler.NewBSONParameter(bson.M{"recoverable_index": i}), nil)
 		if err != nil {
 			log.Println("Failed to register task:", err)
 		}
