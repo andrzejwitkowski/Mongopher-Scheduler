@@ -14,15 +14,6 @@ import (
 )
 
 type MongoTask store.Task[bson.M, primitive.ObjectID]
-type MongoTaskID primitive.ObjectID
-
-func (id MongoTaskID) GetID() any {
-    return primitive.ObjectID(id)
-}
-
-func (id MongoTaskID) Hex() string {
-    return (primitive.ObjectID)(id).Hex()
-}
 
 type MongoStore struct {
     collection *mongo.Collection

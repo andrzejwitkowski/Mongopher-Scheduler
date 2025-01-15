@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"log"
 	scheduler "mongopher-scheduler/task_scheduler/scheduler/mongo"
+	inmemory_scheduler "mongopher-scheduler/task_scheduler/scheduler/inmemory"
 	"mongopher-scheduler/task_scheduler/shared"
 	"mongopher-scheduler/task_scheduler/store"
+
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -85,10 +87,21 @@ func main() {
 		return nil
 	})
 
+	in_memory_task_scheduler := inmemory_scheduler.NewInMemoryTaskScheduler()
+
+	in_memory_task_scheduler.RegisterHandler("sample_in_memory_task", func(task *store.Task[any, int]) error {
+		fmt.Println("Processing in memory task:", task.ID)
+		// Simulate work
+		time.Sleep(2 * time.Second)
+		return nil
+	})
+
+
 	// Start the scheduler
 	scheduler_ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	task_scheduler.StartScheduler(scheduler_ctx)
+	// task_scheduler.StartScheduler(scheduler_ctx)
+	in_memory_task_scheduler.StartScheduler(scheduler_ctx)
 
 
 	// Register some sample tasks
@@ -100,7 +113,8 @@ func main() {
 	// }
 
 	for i := 0; i < 1; i++ {
-		_, err := task_scheduler.RegisterTask("recoverable_task", scheduler.NewBSONParameter(bson.M{"recoverable_index": i}), nil)
+		// _, err := task_scheduler.RegisterTask("recoverable_task", scheduler.NewBSONParameter(bson.M{"recoverable_index": i}), nil)
+		_, err := in_memory_task_scheduler.RegisterTask("sample_in_memory_task", inmemory_scheduler.NewAnyStructParameter(i), nil)
 		if err != nil {
 			log.Println("Failed to register task:", err)
 		}
