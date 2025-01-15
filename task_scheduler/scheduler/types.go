@@ -6,13 +6,10 @@ import (
 	"mongopher-scheduler/task_scheduler/store"
 )
 
-type TaskHandler func(*store.Task) error
-type TaskParameter interface {
-	ToMap() (map[string]interface{}, error)
-}
+type TaskHandler[T any, ID any] func(*store.Task[T, ID]) error
 
-type TaskScheduler interface {
-	RegisterHandler(name string, handler TaskHandler)
+type TaskScheduler[T any, ID any] interface {
+	RegisterHandler(name string, handler TaskHandler[T, ID])
 	StartScheduler(ctx context.Context)
-	RegisterTask(name string, params TaskParameter, scheduledAt *time.Time) (*store.Task, error)
+	RegisterTask(name string, params store.TaskParameter, scheduledAt *time.Time) (*store.Task[T, ID], error)
 }

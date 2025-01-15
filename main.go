@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/mongo/readconcern"
@@ -64,7 +65,7 @@ func main() {
 	task_scheduler := scheduler.NewMongoTaskScheduler(client, "task_scheduler")
 
 	// Register a sample task handler
-	task_scheduler.RegisterHandler("sample_task", func(task *store.Task) error {
+	task_scheduler.RegisterHandler("sample_task", func(task *store.Task[bson.M, primitive.ObjectID]) error {
 		fmt.Println("Processing task:", task.ID)
 		// Simulate work
 		time.Sleep(2 * time.Second)
@@ -72,7 +73,7 @@ func main() {
 	})
 
 	// Register recoverable task handler
-	task_scheduler.RegisterHandler("recoverable_task", func(task *store.Task) error {
+	task_scheduler.RegisterHandler("recoverable_task", func(task *store.Task[bson.M, primitive.ObjectID]) error {
 		fmt.Printf("{Goroutine: %d} Processing recoverable task %s (attempt %d/%d)\n", 
 			shared.GoroutineID(), task.ID.Hex(), task.RetryConfig.Attempts+1, task.RetryConfig.MaxRetries)
 		time.Sleep(1 * time.Second)

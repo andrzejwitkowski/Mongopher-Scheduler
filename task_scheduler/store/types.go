@@ -3,9 +3,6 @@ package store
 import (
 	"mongopher-scheduler/retry"
 	"time"
-
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 type TaskStatus string
@@ -47,14 +44,18 @@ func (rc RetryConfig) GetStrategy() retry.RetryStrategy {
 	}
 }
 
-type Task struct {
-    ID          primitive.ObjectID `bson:"_id,omitempty"`
+type TaskParameter interface {
+	ToMap() (map[string]interface{}, error)
+}
+
+type Task[T any, ID any] struct {
+    ID          ID                 `bson:"_id,omitempty"`
     Name        string            `bson:"name"`
     Status      TaskStatus        `bson:"status"`
     CreatedAt   time.Time         `bson:"created_at"`
     ExecutedAt  *time.Time        `bson:"executed_at,omitempty"`
     ScheduledAt *time.Time        `bson:"scheduled_at,omitempty"`
-    Params      bson.M            `bson:"params,omitempty"`
+    Params      T                 `bson:"params,omitempty"`
     StackTrace  string            `bson:"stack_trace,omitempty"`
     RetryConfig RetryConfig       `bson:"retry_config"`
     History     []TaskHistory     `bson:"history"`

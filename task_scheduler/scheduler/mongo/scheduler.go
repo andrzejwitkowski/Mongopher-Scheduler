@@ -15,20 +15,28 @@ import (
 	mongo_client "go.mongodb.org/mongo-driver/mongo"
 )
 
+type MongoTaskParameter primitive.M
+
+func (mp MongoTaskParameter) ToMap() (map[string]interface{}, error) {
+    return map[string]interface{}(mp), nil
+}
+
+type MongoTaskHandler scheduler.TaskHandler[bson.M, primitive.ObjectID]
+
 type MongoTaskScheduler struct {
     store *mongo.MongoStore
-    handlers map[string]scheduler.TaskHandler
+    handlers map[string]MongoTaskHandler
 }
 
 func NewMongoTaskScheduler(client *mongo_client.Client, dbName string) *MongoTaskScheduler {
     return &MongoTaskScheduler{
         store: mongo.NewMongoStore(client, dbName),
-        handlers: make(map[string]scheduler.TaskHandler),
+        handlers: make(map[string]MongoTaskHandler),
     }
 }
 
 // RegisterHandler registers a new task handler
-func (ts *MongoTaskScheduler) RegisterHandler(name string, handler scheduler.TaskHandler) {
+func (ts *MongoTaskScheduler) RegisterHandler(name string, handler MongoTaskHandler) {
 	ts.handlers[name] = handler
 }
 
@@ -48,8 +56,8 @@ func (ts *MongoTaskScheduler) StartScheduler(ctx context.Context) {
 }
 
 // RegisterTask creates a new task in the database
-func (ts *MongoTaskScheduler) RegisterTask(name string, params scheduler.TaskParameter, scheduledAt *time.Time) (*store.Task, error) {
-	task := store.Task{
+func (ts *MongoTaskScheduler) RegisterTask(name string, params store.TaskParameter, scheduledAt *time.Time) (*mongo.MongoTask, error) {
+	task := mongo.MongoTask{
 		Name:        name,
 		Status:      store.StatusNew,
 		CreatedAt:   time.Now(),
@@ -104,7 +112,7 @@ func (ts *MongoTaskScheduler) processTasks(ctx context.Context) {
 
 	// Launch processing without waiting
 	for _, task := range tasks {
-		go func(t store.Task) {
+		go func(t mongo.MongoTask) {
 			ts.processTaskWithRetry(ctx, task.ID)
 		}(task)
 	}
@@ -129,7 +137,10 @@ func (ts *MongoTaskScheduler) processTaskWithRetry(ctx context.Context, taskId p
 				return
 			}
 		}
-		err := handler(task)
+
+		storeTask := (*store.Task[bson.M, primitive.ObjectID])(task)
+		err := handler(storeTask)
+
 		if err == nil {
 			ts.store.UpdateTaskState(ctx, task.ID, store.StatusDone, "", task.RetryConfig.Attempts, nil)
 			return

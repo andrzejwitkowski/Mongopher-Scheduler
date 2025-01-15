@@ -13,6 +13,17 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
+type MongoTask store.Task[bson.M, primitive.ObjectID]
+type MongoTaskID primitive.ObjectID
+
+func (id MongoTaskID) GetID() any {
+    return primitive.ObjectID(id)
+}
+
+func (id MongoTaskID) Hex() string {
+    return (primitive.ObjectID)(id).Hex()
+}
+
 type MongoStore struct {
     collection *mongo.Collection
 }
@@ -23,17 +34,21 @@ func NewMongoStore(client *mongo.Client, dbName string) *MongoStore {
     }
 }
 
-func (ms *MongoStore) InsertTask(ctx context.Context, task store.Task) (*store.Task, error) {
+func (ms *MongoStore) InsertTask(ctx context.Context, task MongoTask) (*MongoTask, error) {
     result, err := ms.collection.InsertOne(ctx, task)
     if err != nil {
         return nil, err
     }
-    task.ID = result.InsertedID.(primitive.ObjectID)
+    if oid, ok := result.InsertedID.(primitive.ObjectID); ok {
+        task.ID = oid
+    } else {
+        return nil, fmt.Errorf("unexpected ID type: %T", result.InsertedID)
+    }
     return &task, nil
 }
 
-func (ms *MongoStore) GetTaskByID(ctx context.Context, id primitive.ObjectID) (*store.Task, error) {
-    var task store.Task
+func (ms *MongoStore) GetTaskByID(ctx context.Context, id primitive.ObjectID) (*MongoTask, error) {
+    var task MongoTask
     err := ms.collection.FindOne(ctx, bson.M{"_id": id}).Decode(&task)
     if err != nil {
         if err == mongo.ErrNoDocuments {
@@ -49,7 +64,7 @@ func (ms *MongoStore) DeleteTask(ctx context.Context, id primitive.ObjectID) err
     return err
 }
 
-func (ms *MongoStore) FindTasksDue(ctx context.Context) ([]store.Task, error) {
+func (ms *MongoStore) FindTasksDue(ctx context.Context) ([]MongoTask, error) {
     filter := bson.M{
         "status": bson.M{"$in": []string{
             string(store.StatusNew),
@@ -67,7 +82,7 @@ func (ms *MongoStore) FindTasksDue(ctx context.Context) ([]store.Task, error) {
     }
     defer cursor.Close(ctx)
 
-    var tasks []store.Task
+    var tasks []MongoTask
     if err := cursor.All(ctx, &tasks); err != nil {
         return nil, err
     }
