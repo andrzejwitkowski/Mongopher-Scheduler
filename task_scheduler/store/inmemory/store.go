@@ -3,6 +3,7 @@ package inmemory
 import (
 	"context"
 	"errors"
+	"log"
 	"mongopher-scheduler/task_scheduler/store"
 	"sync"
 	"time"
@@ -46,9 +47,9 @@ func (ms *InMemoryStore) DeleteTask(ctx context.Context, id int) error {
 func (ms *InMemoryStore) FindTasksDue(ctx context.Context) ([]InMemoryTask, error) {
 	var tasks []InMemoryTask
 	for _, task := range ms.tasks {
-		if task.Status == store.StatusNew && 
-		task.ScheduledAt == nil ||
-		task.ScheduledAt != nil && task.ScheduledAt.Before(time.Now()) {
+		log.Printf("task scheduledAt: %v", task.ScheduledAt)
+		if task.Status == store.StatusNew || ( task.Status == store.StatusRetrying && 
+			task.ScheduledAt != nil && task.ScheduledAt.Before(time.Now())) {
 			tasks = append(tasks, task)
 		}
 	}

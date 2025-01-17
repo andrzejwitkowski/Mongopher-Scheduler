@@ -82,8 +82,13 @@ func main() {
 
 	in_memory_task_scheduler.RegisterHandler("sample_in_memory_task", func(task *store.Task[any, int]) error {
 		fmt.Println("Processing in memory task:", task.ID)
+
+		if task.RetryConfig.Attempts < 5 {
+			return fmt.Errorf("simulated failure (attempt %d)", task.RetryConfig.Attempts+1)
+		}
+
 		// Simulate work
-		time.Sleep(2 * time.Second)
+		time.Sleep(1 * time.Second)
 		return nil
 	})
 
@@ -103,7 +108,7 @@ func main() {
 	// 	}
 	// }
 
-	for i := 0; i < 5; i++ {
+	for i := 0; i < 1; i++ {
 		// _, err := task_scheduler.RegisterTask("recoverable_task", scheduler.NewBSONParameter(bson.M{"recoverable_index": i}), nil)
 		_, err := in_memory_task_scheduler.RegisterTask("sample_in_memory_task", inmemory.NewAnyStructParameter(i), nil)
 		if err != nil {
