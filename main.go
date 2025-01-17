@@ -103,7 +103,7 @@ func main() {
 	// 	}
 	// }
 
-	for i := 0; i < 1; i++ {
+	for i := 0; i < 5; i++ {
 		// _, err := task_scheduler.RegisterTask("recoverable_task", scheduler.NewBSONParameter(bson.M{"recoverable_index": i}), nil)
 		_, err := in_memory_task_scheduler.RegisterTask("sample_in_memory_task", inmemory.NewAnyStructParameter(i), nil)
 		if err != nil {

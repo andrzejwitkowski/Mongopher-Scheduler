@@ -7,8 +7,32 @@ import (
 	"mongopher-scheduler/task_scheduler/shared"
 	"mongopher-scheduler/task_scheduler/store"
 	"mongopher-scheduler/task_scheduler/store/inmemory"
+	"sync"
 	"time"
 )
+
+type InMemoryTaskIDProvider struct {
+	ID int
+}
+
+func (idp *InMemoryTaskIDProvider) GetNextID() int {
+	idp.ID++
+	return idp.ID
+}
+
+var (
+	instance *InMemoryTaskIDProvider
+	once     sync.Once
+)
+
+func GetInMemoryTaskIDProvider() *InMemoryTaskIDProvider {
+	once.Do(func() {
+		instance = &InMemoryTaskIDProvider{
+			ID: 0,
+		}
+	})
+	return instance
+}
 
 type InMemoryTaskHandler func(*store.Task[any, int]) error
 
@@ -47,6 +71,7 @@ func (ts *InMemoryTaskScheduler) StartScheduler(ctx context.Context) {
 // RegisterTask creates a new task in the database
 func (ts *InMemoryTaskScheduler) RegisterTask(name string, params store.TaskParameter, scheduledAt *time.Time) (*inmemory.InMemoryTask, error) {
 	task := inmemory.InMemoryTask{
+		ID:          GetInMemoryTaskIDProvider().GetNextID(),
 		Name:        name,
 		Status:      store.StatusNew,
 		CreatedAt:   time.Now(),
