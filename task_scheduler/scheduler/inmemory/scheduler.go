@@ -132,5 +132,15 @@ func (ts *InMemoryTaskScheduler) processTaskWithRetry(ctx context.Context, taskI
 	}
 }
 
+func (ts *InMemoryTaskScheduler) FindTasksInStatus(ctx context.Context, task_status store.TaskStatus) ([]store.Task[any, int], error) {
+	tasks, err := ts.store.FindTasksInStatus(ctx, task_status)
+	if err != nil {
+		return nil, err
+	}
 
-
+	converted_tasks := make([]store.Task[any, int], len(tasks))
+	for i, task := range tasks {
+		converted_tasks[i] = store.Task[any, int](task)
+	}
+	return converted_tasks, nil
+}

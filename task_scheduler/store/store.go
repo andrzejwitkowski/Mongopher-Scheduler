@@ -17,4 +17,7 @@ type TaskStore[T any, ID any] interface {
     UpdateTaskState(ctx context.Context,id ID,status TaskStatus,errorMsg string, retryAttempts int, scheduledAt *time.Time) error
     UpdateTaskRetry(ctx context.Context, id ID, attempts int, nextScheduledTime *time.Time) error
     AddTaskHistory(ctx context.Context, id ID, history TaskHistory) error
+
+    GetAllTasks(ctx context.Context) ([]Task[T, ID], error)
+    FindTasksInStatus(ctx context.Context, task_status TaskStatus) ([]Task[T, ID], error)
 }

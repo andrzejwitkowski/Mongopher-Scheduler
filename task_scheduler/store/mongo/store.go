@@ -161,3 +161,28 @@ func (ms *MongoStore) AddTaskHistory(ctx context.Context, id primitive.ObjectID,
     _, err := ms.collection.UpdateByID(ctx, id, update)
     return err
 }
+
+func (ms *MongoStore) GetAllTasks(ctx context.Context) ([]MongoTask, error) {
+    cursor := shared.Must(ms.collection.Find(ctx, bson.M{}))
+    defer cursor.Close(ctx)
+
+    var tasks []MongoTask
+    if err := cursor.All(ctx, &tasks); err != nil {
+        return nil, err
+    }
+    return tasks, nil
+}
+
+func (ms *MongoStore) FindTasksInStatus(ctx context.Context, task_status store.TaskStatus) ([]MongoTask, error) {
+    filter := bson.M{
+        "status": task_status,
+    }
+    cursor := shared.Must(ms.collection.Find(ctx, filter))
+    defer cursor.Close(ctx)
+
+    var tasks []MongoTask
+    if err := cursor.All(ctx, &tasks); err != nil {
+        return nil, err
+    }
+    return tasks, nil
+}

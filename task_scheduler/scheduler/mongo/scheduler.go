@@ -158,3 +158,15 @@ func (ts *MongoTaskScheduler) processTaskWithRetry(ctx context.Context, taskId p
 		ts.store.UpdateTaskState(ctx, task.ID, store.StatusException, "Max retries exceeded", task.RetryConfig.Attempts, nil)
 	}
 }
+
+func (ts *MongoTaskScheduler) FindTasksInStatus(ctx context.Context, task_status store.TaskStatus) ([]store.Task[bson.M, primitive.ObjectID], error) {
+	mongoTasks, err := ts.store.FindTasksInStatus(ctx, task_status)
+	if err != nil {
+		return nil, err
+	}
+	tasks := make([]store.Task[bson.M, primitive.ObjectID], len(mongoTasks))
+	for i, task := range mongoTasks {
+		tasks[i] = store.Task[bson.M, primitive.ObjectID](task)
+	}
+	return tasks, nil
+}

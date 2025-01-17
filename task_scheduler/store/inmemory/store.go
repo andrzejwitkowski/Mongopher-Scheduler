@@ -113,3 +113,21 @@ func (ms *InMemoryStore) AddTaskHistory(ctx context.Context, id int, history sto
 	ms.tasks[id] = task
 	return nil
 }
+
+func (ms *InMemoryStore) GetAllTasks(ctx context.Context) ([]InMemoryTask, error) {
+	var tasks []InMemoryTask
+	for _, task := range ms.tasks {
+		tasks = append(tasks, task)
+	}
+	return tasks, nil
+}
+
+func (ms *InMemoryStore) FindTasksInStatus(ctx context.Context, task_status store.TaskStatus) ([]InMemoryTask, error) {
+	var tasks []InMemoryTask
+	for _, task := range ms.tasks {
+		if task.Status == task_status {
+			tasks = append(tasks, task)
+		}
+	}
+	return tasks, nil
+}
