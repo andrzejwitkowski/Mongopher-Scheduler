@@ -38,6 +38,8 @@ func GetInMemoryTaskIDProvider() *InMemoryTaskIDProvider {
 type InMemoryTaskHandler func(*store.Task[any, int]) error
 
 type InMemoryTaskScheduler struct {
+	context  *context.Context
+	cancelFunc context.CancelFunc
 	store    *inmemory.InMemoryStore
 	handlers map[string]InMemoryTaskHandler
 }
@@ -96,6 +98,10 @@ func (ts *InMemoryTaskScheduler) RegisterHandler(name string, handler InMemoryTa
 
 // StartScheduler begins processing tasks
 func (ts *InMemoryTaskScheduler) StartScheduler(ctx context.Context) {
+	// Create a new context with a cancel function
+	ctx, ts.cancelFunc = context.WithCancel(ctx)
+	ts.context = &ctx
+
 	go func() {
 		for {
 			select {
@@ -107,6 +113,12 @@ func (ts *InMemoryTaskScheduler) StartScheduler(ctx context.Context) {
 			}
 		}
 	}()
+}
+
+func (ts *InMemoryTaskScheduler) StopScheduler() {
+	if ts.cancelFunc != nil {
+		ts.cancelFunc()
+	}
 }
 
 // RegisterTask creates a new task in the database
@@ -166,7 +178,7 @@ func (ts *InMemoryTaskScheduler) processTaskWithRetry(ctx context.Context, taskI
 		return
 	}
 
-	if task.RetryConfig.Attempts <= task.RetryConfig.MaxRetries {
+	if task.RetryConfig.Attempts < task.RetryConfig.MaxRetries {
 		if task.Status != store.StatusInProgress {
 			log.Printf("{GoroutineID: %d} Marking task %d (current status: %s) as IN_PROGRESS",
 				shared.GoroutineID(), task.ID, task.Status)

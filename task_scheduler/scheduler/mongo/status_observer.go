@@ -45,11 +45,11 @@ func (ts *MongoTaskScheduler) WaitForAllTasksToBeDone() (bool, error) {
 	return ts.WaitForAllTasksToBeDoneWithOptions(options)
 }
 
-func (ts *MongoTaskScheduler) WaitForAllTasksToBeDoneWithOptions (options scheduler.WaitForTasksOptions) (bool, error) {
+func (ts *MongoTaskScheduler) WaitForAllTasksToBeDoneWithOptions(options scheduler.WaitForTasksOptions) (bool, error) {
 	return ts.WaitForAllTasksToBeInStatusWithOptions(store.StatusDone, options)
 }
 
-func (ts *MongoTaskScheduler) WaitForAllTasksToBeInStatu(status store.TaskStatus) (bool, error) {
+func (ts *MongoTaskScheduler) WaitForAllTasksToBeInStatus(status store.TaskStatus) (bool, error) {
 	options := scheduler.DefaultWaitForTasksOptions()
 	return ts.WaitForAllTasksToBeInStatusWithOptions(status, options)
 }

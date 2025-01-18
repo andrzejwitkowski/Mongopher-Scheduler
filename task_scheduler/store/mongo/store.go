@@ -80,6 +80,66 @@ func (ms *MongoStore) FindTasksDue(ctx context.Context) ([]MongoTask, error) {
     return tasks, nil
 }
 
+func (ms *MongoStore) FindTasksDueAndUpdateToInProgress(ctx context.Context) ([]MongoTask, error) {
+    filter := bson.M{
+        "status": bson.M{"$in": []string{
+            string(store.StatusNew),
+            string(store.StatusRetrying),
+        }},
+        "$or": []bson.M{
+            {"scheduled_at": bson.M{"$exists": false}},
+            {"scheduled_at": bson.M{"$lte": time.Now()}},
+        },
+    }
+
+    update := bson.M{
+        "$set": bson.M{
+            "status": store.StatusInProgress,
+        },
+        "$push": bson.M{
+            "history": store.TaskHistory{
+                Status:    store.StatusInProgress,
+                Timestamp: time.Now(),
+            },
+        },
+    }
+
+    // Use UpdateMany with a filter that atomically checks and updates
+    result, err := ms.collection.UpdateMany(
+        ctx,
+        filter,
+        update,
+    )
+    if err != nil {
+        return nil, err
+    }
+
+    // If documents were modified, fetch the updated documents
+    if result.ModifiedCount > 0 {
+        // Find the documents we just updated
+        findFilter := bson.M{
+            "status": store.StatusInProgress,
+            "history.timestamp": bson.M{
+                "$gte": time.Now().Add(-1 * time.Second), // Get recently updated docs
+            },
+        }
+        
+        cursor, err := ms.collection.Find(ctx, findFilter)
+        if err != nil {
+            return nil, err
+        }
+        defer cursor.Close(ctx)
+
+        var tasks []MongoTask
+        if err := cursor.All(ctx, &tasks); err != nil {
+            return nil, err
+        }
+        return tasks, nil
+    }
+
+    return []MongoTask{}, nil
+}
+
 func (ms *MongoStore) UpdateTaskStatus(ctx context.Context, id primitive.ObjectID, 
     status store.TaskStatus, errorMsg string) error {
     update := bson.M{
@@ -105,6 +165,10 @@ func (ts *MongoStore) UpdateTaskState(
 	scheduledAt *time.Time) error {
 
 	log.Printf("{GoroutineID: %d} Attempting to update task %s from status to %s", shared.GoroutineID(), id.Hex(), status)
+
+    if errorMsg != "" {
+        log.Printf("{GoroutineID: %d} Error message: %s", shared.GoroutineID(), errorMsg)
+    }
 
     historyEntry := store.TaskHistory{
         Status:    status,

@@ -84,7 +84,7 @@ func TestFailingTaskWithRetries(t *testing.T) {
 
 	// Create a task handler that fails 4 times before succeeding
 	handler := func(task *store.Task[any, int]) error {
-		if task.RetryConfig.Attempts < 5 {
+		if task.RetryConfig.Attempts < 4 {
 			return fmt.Errorf("simulated failure attempt %d", task.RetryConfig.Attempts + 1)
 		}
 		return nil
@@ -113,5 +113,5 @@ func TestFailingTaskWithRetries(t *testing.T) {
 
 	// Verify the task history shows the retries
 	task := tasks[0]
-	assert.Equal(t, 5, task.RetryConfig.Attempts)
+	assert.Equal(t, 4, task.RetryConfig.Attempts)
 }

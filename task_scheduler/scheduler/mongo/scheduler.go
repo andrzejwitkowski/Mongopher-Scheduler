@@ -8,6 +8,7 @@ import (
 	"mongopher-scheduler/task_scheduler/shared"
 	"mongopher-scheduler/task_scheduler/store"
 	"mongopher-scheduler/task_scheduler/store/mongo"
+	"sync"
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -24,11 +25,15 @@ func (mp MongoTaskParameter) ToMap() (map[string]interface{}, error) {
 type MongoTaskHandler scheduler.TaskHandler[bson.M, primitive.ObjectID]
 
 type MongoTaskScheduler struct {
+	context *context.Context
+	cancelFunc context.CancelFunc
     store *mongo.MongoStore
     handlers map[string]MongoTaskHandler
+	mu       sync.RWMutex  
 }
 
 func NewMongoTaskScheduler(client *mongo_client.Client, dbName string) *MongoTaskScheduler {
+	log.Printf("{GoroutineID: %d} CREATING NEW: NewMongoTaskScheduler", shared.GoroutineID())
     return &MongoTaskScheduler{
         store: mongo.NewMongoStore(client, dbName),
         handlers: make(map[string]MongoTaskHandler),
@@ -38,10 +43,19 @@ func NewMongoTaskScheduler(client *mongo_client.Client, dbName string) *MongoTas
 // RegisterHandler registers a new task handler
 func (ts *MongoTaskScheduler) RegisterHandler(name string, handler MongoTaskHandler) {
 	ts.handlers[name] = handler
+	log.Printf("{GoroutineID: %d} Registered handler: %s", shared.GoroutineID(), name)
+	log.Printf("{GoroutineID: %d} Number of handlers: %d", shared.GoroutineID(), len(ts.handlers))
+	log.Printf("RegisterHandler: Map address: %p, Handler: %s, Total handlers: %d", 
+        &ts.handlers, name, len(ts.handlers))
+	log.Printf("Task scheduler address: %p", ts)
 }
 
 // StartScheduler begins processing tasks
 func (ts *MongoTaskScheduler) StartScheduler(ctx context.Context) {
+
+	// Create a new context with a cancel function
+	ctx, ts.cancelFunc = context.WithCancel(ctx)
+	ts.context = &ctx
 	go func() {
 		for {
 			select {
@@ -53,6 +67,12 @@ func (ts *MongoTaskScheduler) StartScheduler(ctx context.Context) {
 			}
 		}
 	}()
+}
+
+func (ts *MongoTaskScheduler) StopScheduler() {
+	if ts.cancelFunc != nil {
+		ts.cancelFunc()
+	}
 }
 
 // RegisterTask creates a new task in the database
@@ -93,21 +113,11 @@ func mapToBSON(m map[string]interface{}) (bson.M, error) {
 }
 
 func (ts *MongoTaskScheduler) processTasks(ctx context.Context) {
-	// Find all tasks that are ready to be executed
-	tasks := shared.Must(ts.store.FindTasksDue(ctx))
+	// Find all tasks that are ready to be executed and update to IN_PROGRESS
+	tasks := shared.Must(ts.store.FindTasksDueAndUpdateToInProgress(ctx))
 	log.Printf("{GoroutineID: %d}, Found %d tasks to process", shared.GoroutineID(), len(tasks))
 	for _, task := range tasks {
 		log.Printf("{GoroutineID: %d}, task Id: %s, status: %s", shared.GoroutineID(), task.ID.Hex(), task.Status)
-	}
-
-	// Mark all tasks as IN_PROGRESS synchronously
-	for _, task := range tasks {
-		log.Printf("{GoroutineID: %d} Attempting to mark task %s (current status: %s) as IN_PROGRESS",
-			shared.GoroutineID(), task.ID.Hex(), task.Status)
-		if err := ts.store.UpdateTaskState(ctx, task.ID, store.StatusInProgress, "", task.RetryConfig.Attempts, nil); err != nil {
-			log.Printf("Error updating task status: %v", err)
-			continue
-		}
 	}
 
 	// Launch processing without waiting
@@ -118,11 +128,27 @@ func (ts *MongoTaskScheduler) processTasks(ctx context.Context) {
 	}
 }
 
+func (ts *MongoTaskScheduler) getHandler(taskName string) (MongoTaskHandler, bool) {
+	ts.mu.RLock()
+	defer ts.mu.RUnlock()
+	log.Printf("Map address: %p, Handler: %s, Total handlers: %d", 
+        &ts.handlers, taskName, len(ts.handlers))
+	log.Printf("Task scheduler address: %p", ts)
+	handler, exists := ts.handlers[taskName]
+	return handler, exists
+}
+
 func (ts *MongoTaskScheduler) processTaskWithRetry(ctx context.Context, taskId primitive.ObjectID) {
 
 	task := shared.Must(ts.store.GetTaskByID(ctx, taskId))
 
-	handler, exists := ts.handlers[task.Name]
+	log.Printf("{GoroutineID: %d} Number of handlers: %d", shared.GoroutineID(), len(ts.handlers))
+	handler, exists := ts.getHandler(task.Name)
+
+	for key, _ := range ts.handlers {
+		log.Printf("{GoroutineID: %d} Handler: %s", shared.GoroutineID(),key)
+	}
+
 	if !exists {
 		ts.store.UpdateTaskState(ctx, task.ID, store.StatusException, fmt.Sprintf("No handler found for TaskName: %s", task.Name), 0, nil)
 		return

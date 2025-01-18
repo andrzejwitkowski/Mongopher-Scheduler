@@ -56,6 +56,20 @@ func (ms *InMemoryStore) FindTasksDue(ctx context.Context) ([]InMemoryTask, erro
 	return tasks, nil
 }
 
+func (ms *InMemoryStore) FindTasksDueAndUpdateToInProgress(ctx context.Context) ([]InMemoryTask, error) {
+	tasks, err := ms.FindTasksDue(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, task := range tasks {
+		err := ms.UpdateTaskStatus(ctx, task.ID, store.StatusInProgress, "")
+		if err != nil {
+			return nil, err
+		}
+	}
+	return tasks, nil
+}
+
 func (ms *InMemoryStore) UpdateTaskStatus(ctx context.Context, id int, status store.TaskStatus, errorMsg string) error {
 	ms.mutex.Lock()
 	defer ms.mutex.Unlock()

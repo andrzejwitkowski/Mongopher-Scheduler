@@ -11,6 +11,7 @@ type TaskHandler[T any, ID any] func(*store.Task[T, ID]) error
 type TaskScheduler[T any, ID any] interface {
 	RegisterHandler(name string, handler TaskHandler[T, ID])
 	StartScheduler(ctx context.Context)
+	StopScheduler()
 	RegisterTask(name string, params store.TaskParameter, scheduledAt *time.Time) (*store.Task[T, ID], error)
 
 	FindTasksInStatus(ctx context.Context, task_status store.TaskStatus) ([]store.Task[T, ID], error)
