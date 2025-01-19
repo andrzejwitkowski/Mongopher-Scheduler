@@ -2,8 +2,8 @@ package mongo
 
 import (
 	"context"
-	"mongopher-scheduler/task_scheduler/scheduler"
-	"mongopher-scheduler/task_scheduler/store"
+	"github.com/andrzejwitkowski/Mongopher-Scheduler/task_scheduler/scheduler"
+	"github.com/andrzejwitkowski/Mongopher-Scheduler/task_scheduler/store"
 	"time"
 )
 

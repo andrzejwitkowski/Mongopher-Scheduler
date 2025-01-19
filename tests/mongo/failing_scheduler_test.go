@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"testing"
 
-	mongo_scheduler "mongopher-scheduler/task_scheduler/scheduler/mongo"
-	"mongopher-scheduler/task_scheduler/store"
+	mongo_scheduler "github.com/andrzejwitkowski/Mongopher-Scheduler/task_scheduler/scheduler/mongo"
+	"github.com/andrzejwitkowski/Mongopher-Scheduler/task_scheduler/store"
 
 	"github.com/stretchr/testify/assert"
 	"go.mongodb.org/mongo-driver/bson"

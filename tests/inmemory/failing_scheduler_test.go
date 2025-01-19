@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"testing"
 
-	inmemory_scheduler "mongopher-scheduler/task_scheduler/scheduler/inmemory"
-	"mongopher-scheduler/task_scheduler/store"
-	inmemory_store "mongopher-scheduler/task_scheduler/store/inmemory"
+	inmemory_scheduler "github.com/andrzejwitkowski/Mongopher-Scheduler/task_scheduler/scheduler/inmemory"
+	"github.com/andrzejwitkowski/Mongopher-Scheduler/task_scheduler/store"
+	inmemory_store "github.com/andrzejwitkowski/Mongopher-Scheduler/task_scheduler/store/inmemory"
 
 	"github.com/stretchr/testify/assert"
 )

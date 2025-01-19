@@ -1,7 +1,7 @@
 package store
 
 import (
-	"mongopher-scheduler/retry"
+	"github.com/andrzejwitkowski/Mongopher-Scheduler/retry"
 	"time"
 )
 

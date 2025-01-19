@@ -3,7 +3,7 @@ package scheduler
 import (
 	"context"
 	"time"
-	"mongopher-scheduler/task_scheduler/store"
+	"github.com/andrzejwitkowski/Mongopher-Scheduler/task_scheduler/store"
 )
 
 type TaskHandler[T any, ID any] func(*store.Task[T, ID]) error

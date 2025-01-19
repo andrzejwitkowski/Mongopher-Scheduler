@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"log"
-	"mongopher-scheduler/task_scheduler/store"
+	"github.com/andrzejwitkowski/Mongopher-Scheduler/task_scheduler/store"
 	"sync"
 	"time"
 )
@@ -12,45 +12,46 @@ import (
 type InMemoryTask store.Task[any, int]
 
 type InMemoryStore struct {
-	tasks map[int]InMemoryTask
+	tasks sync.Map
 	mutex sync.Mutex
 }
 
 func NewInMemoryStore() *InMemoryStore {
 	return &InMemoryStore{
-		tasks: make(map[int]InMemoryTask),
+		tasks: sync.Map{},
 	}
 }
 
 func (ms *InMemoryStore) InsertTask(ctx context.Context, task InMemoryTask) (*InMemoryTask, error) {
-	ms.tasks[task.ID] = task
+	ms.tasks.Store(task.ID, &task)
 	return &task, nil
 }
 
 func (ms *InMemoryStore) GetTaskByID(ctx context.Context, id int) (*InMemoryTask, error) {
-	task, ok := ms.tasks[id]
+	task, ok := ms.tasks.Load(id)
 	if !ok {
 		return nil, errors.New("task not found")
 	}
-	return &task, nil
+	return task.(*InMemoryTask), nil
 }
 
 func (ms *InMemoryStore) DeleteTask(ctx context.Context, id int) error {
-	_, ok := ms.tasks[id]
+	_, ok := ms.tasks.Load(id)
 	if !ok {
 		return errors.New("task not found")
 	}
-	delete(ms.tasks, id)
+	ms.tasks.Delete(id)
 	return nil
 }
 
 func (ms *InMemoryStore) FindTasksDue(ctx context.Context) ([]InMemoryTask, error) {
 	var tasks []InMemoryTask
-	for _, task := range ms.tasks {
+	for _, task := range ms.tasks.Range {
+		task := task.(*InMemoryTask)
 		log.Printf("task scheduledAt: %v", task.ScheduledAt)
 		if task.Status == store.StatusNew || ( task.Status == store.StatusRetrying && 
 			task.ScheduledAt != nil && task.ScheduledAt.Before(time.Now())) {
-			tasks = append(tasks, task)
+			tasks = append(tasks, *task)
 		}
 	}
 	return tasks, nil
@@ -74,12 +75,12 @@ func (ms *InMemoryStore) UpdateTaskStatus(ctx context.Context, id int, status st
 	ms.mutex.Lock()
 	defer ms.mutex.Unlock()
 
-	task, ok := ms.tasks[id]
+	task, ok := ms.tasks.Load(id)
 	if !ok {
 		return errors.New("task not found")
 	}
-	task.Status = status
-	ms.tasks[id] = task
+	task.(*InMemoryTask).Status = status
+	ms.tasks.Store(id, task)
 	return nil
 }
 
@@ -87,16 +88,17 @@ func (ms *InMemoryStore) UpdateTaskState(ctx context.Context, id int, status sto
 	ms.mutex.Lock()
 	defer ms.mutex.Unlock()
 
-	task, ok := ms.tasks[id]
+	task, ok := ms.tasks.Load(id)
 	if !ok {
 		return errors.New("task not found")
 	}
-	task.Status = status
-	task.RetryConfig.Attempts = retryAttempts
+
+	task.(*InMemoryTask).Status = status
+	task.(*InMemoryTask).RetryConfig.Attempts = retryAttempts
 	if scheduledAt != nil {
-		task.ScheduledAt = scheduledAt
+		task.(*InMemoryTask).ScheduledAt = scheduledAt
 	}
-	ms.tasks[id] = task
+	ms.tasks.Store(id, task)
 	return nil
 }
 
@@ -104,15 +106,16 @@ func (ms *InMemoryStore) UpdateTaskRetry(ctx context.Context, id int, attempts i
 	ms.mutex.Lock()
 	defer ms.mutex.Unlock()
 
-	task, ok := ms.tasks[id]
+	task, ok := ms.tasks.Load(id)
 	if !ok {
 		return errors.New("task not found")
 	}
-	task.RetryConfig.Attempts = attempts
+
+	task.(*InMemoryTask).RetryConfig.Attempts = attempts
 	if nextScheduledTime != nil {
-		task.ScheduledAt = nextScheduledTime
+		task.(*InMemoryTask).ScheduledAt = nextScheduledTime
 	}
-	ms.tasks[id] = task
+	ms.tasks.Store(id, task)
 	return nil
 }
 
@@ -120,28 +123,30 @@ func (ms *InMemoryStore) AddTaskHistory(ctx context.Context, id int, history sto
 	ms.mutex.Lock()
 	defer ms.mutex.Unlock()
 
-	task, ok := ms.tasks[id]
+	task, ok := ms.tasks.Load(id)
 	if !ok {
 		return errors.New("task not found")
 	}
-	task.History = append(task.History, history)
-	ms.tasks[id] = task
+	task.(*InMemoryTask).History = append(task.(*InMemoryTask).History, history)
+	ms.tasks.Store(id, task)
 	return nil
 }
 
 func (ms *InMemoryStore) GetAllTasks(ctx context.Context) ([]InMemoryTask, error) {
 	var tasks []InMemoryTask
-	for _, task := range ms.tasks {
-		tasks = append(tasks, task)
+	for _, task := range ms.tasks.Range {
+		task := task.(*InMemoryTask)
+		tasks = append(tasks, *task)
 	}
 	return tasks, nil
 }
 
 func (ms *InMemoryStore) FindTasksInStatus(ctx context.Context, task_status store.TaskStatus) ([]InMemoryTask, error) {
 	var tasks []InMemoryTask
-	for _, task := range ms.tasks {
+	for _, task := range ms.tasks.Range {
+		task := task.(*InMemoryTask)
 		if task.Status == task_status {
-			tasks = append(tasks, task)
+			tasks = append(tasks, *task)
 		}
 	}
 	return tasks, nil

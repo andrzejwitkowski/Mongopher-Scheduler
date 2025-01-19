@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"mongopher-scheduler/task_scheduler/store"
-    "mongopher-scheduler/task_scheduler/shared"
+	"github.com/andrzejwitkowski/Mongopher-Scheduler/task_scheduler/store"
+    "github.com/andrzejwitkowski/Mongopher-Scheduler/task_scheduler/shared"
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
