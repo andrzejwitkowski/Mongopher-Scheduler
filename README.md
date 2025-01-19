@@ -18,5 +18,5 @@ This is a simple task scheduler for MongoDB written in Go. It is designed to be 
 To install the Mongopher-Scheduler, you can use the following command:
 
 ```bash
-go get github.com/mongopher/mongopher-scheduler
+go get github.com/andrzejwitkowski/Mongopher-Scheduler
 ```
