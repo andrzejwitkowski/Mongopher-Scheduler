@@ -5,6 +5,9 @@ on:
     tags:
       - 'v*.*.*'
 
+permissions:
+  contents: write    # Add this permissions block      
+
 jobs:
   publish:
     runs-on: ubuntu-latest
