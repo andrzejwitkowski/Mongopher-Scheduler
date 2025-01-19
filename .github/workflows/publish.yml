@@ -33,10 +33,3 @@ jobs:
           release_name: Release ${{ github.ref }}
           draft: false
           prerelease: false
-
-      - name: Publish Go Module
-        run: |
-          git config --global user.name "Andrzej Witkowski"
-          git config --global user.email "andrzej.witkowski@gmail.com"
-          git tag -a ${{ github.ref }} -m "Release ${{ github.ref }}"
-          git push origin ${{ github.ref }}
