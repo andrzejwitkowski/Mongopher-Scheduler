@@ -12,8 +12,9 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
+	
 	mongo_scheduler "github.com/andrzejwitkowski/Mongopher-Scheduler/task_scheduler/scheduler/mongo"
+	mongo_store "github.com/andrzejwitkowski/Mongopher-Scheduler/task_scheduler/store/mongo"
 	"github.com/andrzejwitkowski/Mongopher-Scheduler/task_scheduler/store"
 )
 
@@ -90,7 +91,7 @@ func TestSingleTaskSuccess(t *testing.T) {
 	defer scheduler.StopScheduler()
 
 	// Create a simple task handler that always succeeds
-	handler := func(task *store.Task[bson.M, primitive.ObjectID]) error {
+	handler := func(task mongo_store.MongoTask) error {
 		return nil
 	}
 
@@ -127,7 +128,7 @@ func TestMultipleTasksSuccess(t *testing.T) {
 	defer scheduler.StopScheduler()
 
 	// Create a simple task handler that always succeeds
-	handler := func(task *store.Task[bson.M, primitive.ObjectID]) error {
+	handler := func(task mongo_store.MongoTask) error {
 		return nil
 	}
 
@@ -169,7 +170,7 @@ func TestFailingTaskWithRetries(t *testing.T) {
 	defer scheduler.StopScheduler()
 
 	// Create a task handler that fails 4 times before succeeding
-	handler := func(task *store.Task[bson.M, primitive.ObjectID]) error {
+	handler := func(task mongo_store.MongoTask) error {
 		if task.RetryConfig.Attempts < 5 {
 			return fmt.Errorf("simulated failure attempt %d", task.RetryConfig.Attempts + 1)
 		}

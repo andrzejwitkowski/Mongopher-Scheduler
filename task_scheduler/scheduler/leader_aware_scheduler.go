@@ -11,8 +11,8 @@ import (
 
 var ErrNotLeader = errors.New("not the current leader")
 
-type LeaderAwareTaskScheduler[T any, ID comparable] struct {
-	scheduler      TaskScheduler[T, ID]
+type LeaderAwareTaskScheduler struct {
+	scheduler      TaskScheduler
 	leaderElection LeaderElection
 	eventRegistry  *LeaderEventRegistry
 	heartbeat      HeartbeatManager
@@ -21,14 +21,14 @@ type LeaderAwareTaskScheduler[T any, ID comparable] struct {
 	cancelFunc     context.CancelFunc
 }
 
-func NewLeaderAwareTaskScheduler[T any, ID comparable](
-	scheduler TaskScheduler[T, ID],
+func NewLeaderAwareTaskScheduler(
+	scheduler TaskScheduler,
 	leaderElection LeaderElection,
 	eventRegistry *LeaderEventRegistry,
-) *LeaderAwareTaskScheduler[T, ID] {
+) *LeaderAwareTaskScheduler {
 	ctx, cancel := context.WithCancel(context.Background())
 
-	las := &LeaderAwareTaskScheduler[T, ID]{
+	las := &LeaderAwareTaskScheduler{
 		scheduler:      scheduler,
 		leaderElection: leaderElection,
 		eventRegistry:  eventRegistry,
@@ -69,7 +69,7 @@ func NewLeaderAwareTaskScheduler[T any, ID comparable](
 	return las
 }
 
-func (las *LeaderAwareTaskScheduler[T, ID]) HandleLeaderEvent(ctx context.Context, event LeaderEventType) {
+func (las *LeaderAwareTaskScheduler) HandleLeaderEvent(ctx context.Context, event LeaderEventType) {
 	las.mu.Lock()
 	defer las.mu.Unlock()
 
@@ -83,7 +83,7 @@ func (las *LeaderAwareTaskScheduler[T, ID]) HandleLeaderEvent(ctx context.Contex
 	}
 }
 
-func (las *LeaderAwareTaskScheduler[T, ID]) RegisterTask(ctx context.Context, name string, params store.TaskParameter, scheduledAt *time.Time) (*store.Task[T, ID], error) {
+func (las *LeaderAwareTaskScheduler) RegisterTask(ctx context.Context, name string, params map[string]interface{}, scheduledAt *time.Time) (Task, error) {
 	las.mu.Lock()
 	defer las.mu.Unlock()
 
@@ -93,7 +93,7 @@ func (las *LeaderAwareTaskScheduler[T, ID]) RegisterTask(ctx context.Context, na
 	return las.scheduler.RegisterTask(name, params, scheduledAt)
 }
 
-func (las *LeaderAwareTaskScheduler[T, ID]) FindTasksInStatus(ctx context.Context, status store.TaskStatus) ([]store.Task[T, ID], error) {
+func (las *LeaderAwareTaskScheduler) FindTasksInStatus(ctx context.Context, status store.TaskStatus) ([]Task, error) {
 	las.mu.Lock()
 	defer las.mu.Unlock()
 
@@ -103,7 +103,7 @@ func (las *LeaderAwareTaskScheduler[T, ID]) FindTasksInStatus(ctx context.Contex
 	return las.scheduler.FindTasksInStatus(ctx, status)
 }
 
-func (las *LeaderAwareTaskScheduler[T, ID]) Close() error {
+func (las *LeaderAwareTaskScheduler) Close() error {
 	las.mu.Lock()
 	defer las.mu.Unlock()
 
