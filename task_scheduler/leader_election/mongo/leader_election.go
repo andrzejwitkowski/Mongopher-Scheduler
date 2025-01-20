@@ -1,18 +1,16 @@
-package mongo
+package leader_election
 
 import (
 	"context"
 	"sync"
 	"time"
 
-	"github.com/andrzejwitkowski/Mongopher-Scheduler/task_scheduler/scheduler"
 	"github.com/andrzejwitkowski/Mongopher-Scheduler/task_scheduler/shared"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-var _ scheduler.LeaderElection = (*MongoLeaderElection)(nil)
 
 type MongoLeaderElection struct {
 	instanceID   string

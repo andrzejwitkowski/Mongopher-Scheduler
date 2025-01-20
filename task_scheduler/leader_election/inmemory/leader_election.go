@@ -1,4 +1,4 @@
-package inmemory
+package leader_election
 
 import (
 	"context"
@@ -6,11 +6,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/andrzejwitkowski/Mongopher-Scheduler/task_scheduler/scheduler"
 	"github.com/andrzejwitkowski/Mongopher-Scheduler/task_scheduler/shared"
 )
 
-var _ scheduler.LeaderElection = (*LeaderElection)(nil)
 
 var (
 	leaderStore     *sync.Map

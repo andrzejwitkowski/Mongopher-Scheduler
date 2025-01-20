@@ -6,6 +6,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/andrzejwitkowski/Mongopher-Scheduler/task_scheduler/leader_election"
+	"github.com/andrzejwitkowski/Mongopher-Scheduler/task_scheduler/heartbeat"
+	"github.com/andrzejwitkowski/Mongopher-Scheduler/task_scheduler/shared"
 	"github.com/andrzejwitkowski/Mongopher-Scheduler/task_scheduler/store"
 )
 
@@ -13,9 +16,8 @@ var ErrNotLeader = errors.New("not the current leader")
 
 type LeaderAwareTaskScheduler struct {
 	scheduler      TaskScheduler
-	leaderElection LeaderElection
-	eventRegistry  *LeaderEventRegistry
-	heartbeat      HeartbeatManager
+	leaderElection leader_election.LeaderElection
+	heartbeat      heartbeat.HeartbeatManager
 	isLeader       bool
 	mu             sync.Mutex
 	cancelFunc     context.CancelFunc
@@ -23,16 +25,14 @@ type LeaderAwareTaskScheduler struct {
 
 func NewLeaderAwareTaskScheduler(
 	scheduler TaskScheduler,
-	leaderElection LeaderElection,
-	eventRegistry *LeaderEventRegistry,
+	leaderElection leader_election.LeaderElection,
 ) *LeaderAwareTaskScheduler {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	las := &LeaderAwareTaskScheduler{
 		scheduler:      scheduler,
 		leaderElection: leaderElection,
-		eventRegistry:  eventRegistry,
-		heartbeat:      NewHeartbeatManager(5*time.Second, 30*time.Second),
+		heartbeat:      heartbeat.NewHeartbeatManager(5*time.Second, 30*time.Second),
 		cancelFunc:     cancel,
 	}
 
@@ -41,46 +41,26 @@ func NewLeaderAwareTaskScheduler(
 		func(ctx context.Context) error {
 			las.mu.Lock()
 			defer las.mu.Unlock()
-
+	
 			if las.isLeader {
-				if _, err := las.leaderElection.ElectLeader(ctx); err != nil {
-					return err
-				}
+				shared.Must(las.leaderElection.ElectLeader(ctx))
 			}
 			return nil
 		},
 		func(ctx context.Context) {
 			las.mu.Lock()
 			defer las.mu.Unlock()
-
 			las.isLeader = false
-			las.eventRegistry.Notify(ctx, LeaderResigned)
 		},
 	)
 
 	// Attempt to become leader immediately
 	if isLeader, err := leaderElection.ElectLeader(ctx); err == nil && isLeader {
 		las.isLeader = true
-	} else {
-		eventRegistry.Register(las)
 	}
 
 	las.heartbeat.Start(ctx)
 	return las
-}
-
-func (las *LeaderAwareTaskScheduler) HandleLeaderEvent(ctx context.Context, event LeaderEventType) {
-	las.mu.Lock()
-	defer las.mu.Unlock()
-
-	switch event {
-	case LeaderElected:
-		if isLeader, err := las.leaderElection.IsLeader(ctx); err == nil && isLeader {
-			las.isLeader = true
-		}
-	case LeaderResigned:
-		las.isLeader = false
-	}
 }
 
 func (las *LeaderAwareTaskScheduler) RegisterTask(ctx context.Context, name string, params map[string]interface{}, scheduledAt *time.Time) (Task, error) {
@@ -114,7 +94,7 @@ func (las *LeaderAwareTaskScheduler) Close() error {
 	las.heartbeat.Stop()
 
 	if las.isLeader {
-		if err := las.leaderElection.Resign(context.Background()); err != nil {
+		if err := las.leaderElection.Resign(); err != nil {
 			return err
 		}
 		las.isLeader = false
