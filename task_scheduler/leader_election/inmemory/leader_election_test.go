@@ -1,4 +1,4 @@
-package inmemory
+package leader_election
 
 import (
     "context"
@@ -7,18 +7,17 @@ import (
     "time"
     
     "github.com/stretchr/testify/assert"
-    "github.com/andrzejwitkowski/Mongopher-Scheduler/task_scheduler/scheduler/inmemory"
     "github.com/andrzejwitkowski/Mongopher-Scheduler/task_scheduler/shared"
 )
 
 func setup() {
-    inmemory.Reset()
+    Reset()
 }
 
 func TestLeaderElection_HappyPath(t *testing.T) {
     setup()
     timeProvider := shared.NewMockTimeProvider(time.Now())
-    le := inmemory.NewLeaderElectionWithTimeProvider("instance-1", timeProvider)
+    le := NewLeaderElectionWithTimeProvider("instance-1", timeProvider)
     
     // Become leader
     isLeader, err := le.ElectLeader(context.Background())
@@ -52,8 +51,8 @@ func TestLeaderElection_Failover(t *testing.T) {
     setup()
     startTime := time.Now()
     timeProvider := shared.NewMockTimeProvider(startTime)
-    le1 := inmemory.NewLeaderElectionWithTimeProvider("instance-1", timeProvider)
-    le2 := inmemory.NewLeaderElectionWithTimeProvider("instance-2", timeProvider)
+    le1 := NewLeaderElectionWithTimeProvider("instance-1", timeProvider)
+    le2 := NewLeaderElectionWithTimeProvider("instance-2", timeProvider)
     
     // First instance becomes leader
     isLeader, err := le1.ElectLeader(context.Background())
@@ -80,8 +79,8 @@ func TestLeaderElection_Failover(t *testing.T) {
 func TestLeaderElection_Resign(t *testing.T) {
     setup()
     timeProvider := shared.NewMockTimeProvider(time.Now())
-    le1 := inmemory.NewLeaderElectionWithTimeProvider("instance-1", timeProvider)
-    le2 := inmemory.NewLeaderElectionWithTimeProvider("instance-2", timeProvider)
+    le1 := NewLeaderElectionWithTimeProvider("instance-1", timeProvider)
+    le2 := NewLeaderElectionWithTimeProvider("instance-2", timeProvider)
 
     // First instance becomes leader
     timeProvider.AdvanceBy(5 * time.Second)
@@ -114,8 +113,8 @@ func TestLeaderElection_Concurrent(t *testing.T) {
     setup()
     timeProvider := shared.NewMockTimeProvider(time.Now())
     
-    le1 := inmemory.NewLeaderElectionWithTimeProvider("instance-1", timeProvider)
-    le2 := inmemory.NewLeaderElectionWithTimeProvider("instance-2", timeProvider)
+    le1 := NewLeaderElectionWithTimeProvider("instance-1", timeProvider)
+    le2 := NewLeaderElectionWithTimeProvider("instance-2", timeProvider)
     
     // Use a barrier to ensure both elections start at the same time
     var startBarrier, endBarrier sync.WaitGroup
