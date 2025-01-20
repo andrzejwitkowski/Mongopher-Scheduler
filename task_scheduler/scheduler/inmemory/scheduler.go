@@ -4,12 +4,13 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"sync"
+	"time"
+
 	"github.com/andrzejwitkowski/Mongopher-Scheduler/task_scheduler/scheduler"
 	"github.com/andrzejwitkowski/Mongopher-Scheduler/task_scheduler/shared"
 	"github.com/andrzejwitkowski/Mongopher-Scheduler/task_scheduler/store"
 	"github.com/andrzejwitkowski/Mongopher-Scheduler/task_scheduler/store/inmemory"
-	"sync"
-	"time"
 )
 
 type InMemoryTaskIDProvider struct {
@@ -38,10 +39,12 @@ func GetInMemoryTaskIDProvider() *InMemoryTaskIDProvider {
 type InMemoryTaskHandler func(*store.Task[any, int]) error
 
 type InMemoryTaskScheduler struct {
-	context  *context.Context
+	context    *context.Context
 	cancelFunc context.CancelFunc
-	store    *inmemory.InMemoryStore
-	handlers map[string]InMemoryTaskHandler
+	store      *inmemory.InMemoryStore
+	handlers   map[string]InMemoryTaskHandler
+	running    bool
+	mu         sync.Mutex
 }
 
 func NewInMemoryTaskScheduler() *InMemoryTaskScheduler {
@@ -97,15 +100,26 @@ func (ts *InMemoryTaskScheduler) RegisterHandler(name string, handler InMemoryTa
 }
 
 // StartScheduler begins processing tasks
-func (ts *InMemoryTaskScheduler) StartScheduler(ctx context.Context) {
+func (ts *InMemoryTaskScheduler) StartScheduler(ctx context.Context) error {
+	ts.mu.Lock()
+	defer ts.mu.Unlock()
+
+	if ts.running {
+		return nil
+	}
+
 	// Create a new context with a cancel function
 	ctx, ts.cancelFunc = context.WithCancel(ctx)
 	ts.context = &ctx
+	ts.running = true
 
 	go func() {
 		for {
 			select {
 			case <-ctx.Done():
+				ts.mu.Lock()
+				ts.running = false
+				ts.mu.Unlock()
 				return
 			default:
 				ts.processTasks(ctx)
@@ -113,12 +127,24 @@ func (ts *InMemoryTaskScheduler) StartScheduler(ctx context.Context) {
 			}
 		}
 	}()
+	return nil
 }
 
-func (ts *InMemoryTaskScheduler) StopScheduler() {
+func (ts *InMemoryTaskScheduler) IsRunning() bool {
+	ts.mu.Lock()
+	defer ts.mu.Unlock()
+	return ts.running
+}
+
+func (ts *InMemoryTaskScheduler) StopScheduler() error {
+	ts.mu.Lock()
+	defer ts.mu.Unlock()
+
 	if ts.cancelFunc != nil {
 		ts.cancelFunc()
+		ts.running = false
 	}
+	return nil
 }
 
 // RegisterTask creates a new task in the database
@@ -201,7 +227,7 @@ func (ts *InMemoryTaskScheduler) processTaskWithRetry(ctx context.Context, taskI
 		next_attempt := task.RetryConfig.Attempts + 1
 		delay := task.RetryConfig.GetStrategy().NextDelay(task.RetryConfig.Attempts)
 		nextExecution := time.Now().Add(delay)
-		
+
 		log.Printf("{GoroutineID: %d} Marking task %d (current status: %s) as RETRYING (attempt %d/%d)",
 			shared.GoroutineID(), task.ID, task.Status, next_attempt, task.RetryConfig.MaxRetries)
 		log.Printf("{GoroutineID: %d} Updating task %d (current status: %s) with next execution time: %s",

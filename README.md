@@ -14,7 +14,7 @@ A distributed task scheduler for Go applications with MongoDB and in-memory stor
 - Concurrent-safe operations
 - Distributed leader election with TTL-based failover (in-memory only)
 
-## Leader Election
+## Leader Election (Low-Level API)
 
 The scheduler includes a distributed leader election mechanism for coordinating multiple instances. **Note:** Currently only available for the in-memory version.
 
@@ -33,7 +33,65 @@ The leader election is used to ensure only one scheduler instance processes task
 - **Concurrent-safe** - Uses sync.Map for thread-safe operations
 - **Mock time provider** - Enables precise testing of time-based operations
 
-### Usage
+### Leader-Aware Scheduler
+
+The LeaderAwareScheduler wraps any TaskScheduler implementation with leader election capabilities. It ensures that only the leader instance processes tasks, while non-leader instances remain idle.
+
+#### Example Usage
+
+```go
+// Create leader election instances
+leaderElection1 := inmemory.NewLeaderElection("instance-1")
+leaderElection2 := inmemory.NewLeaderElection("instance-2")
+
+// Create base schedulers
+scheduler1 := inmemory.NewInMemoryTaskScheduler()
+scheduler2 := inmemory.NewInMemoryTaskScheduler()
+
+// Wrap with leader awareness
+leaderAwareScheduler1 := leader.NewLeaderAwareScheduler(leaderElection1, scheduler1)
+leaderAwareScheduler2 := leader.NewLeaderAwareScheduler(leaderElection2, scheduler2)
+
+// Start both schedulers
+ctx := context.Background()
+if err := leaderAwareScheduler1.StartScheduler(ctx); err != nil {
+    log.Fatal(err)
+}
+if err := leaderAwareScheduler2.StartScheduler(ctx); err != nil {
+    log.Fatal(err)
+}
+
+// Only the leader will process tasks
+_, err := leaderAwareScheduler1.RegisterTask("example-task", nil, nil)
+if err != nil {
+    log.Fatal(err)
+}
+
+// Check leadership status
+isLeader, err := leaderElection1.IsLeader(ctx)
+if err != nil {
+    log.Fatal(err)
+}
+log.Printf("Instance 1 is leader: %v", isLeader)
+
+// Graceful shutdown
+if err := leaderAwareScheduler1.StopScheduler(); err != nil {
+    log.Fatal(err)
+}
+if err := leaderAwareScheduler2.StopScheduler(); err != nil {
+    log.Fatal(err)
+}
+```
+
+#### Key Features
+
+- **Automatic leader election** - Handles leader election and failover automatically
+- **Task processing isolation** - Only the leader processes tasks
+- **Graceful failover** - Tasks continue processing after leader change
+- **Context support** - Proper context propagation for cancellation
+- **Concurrent-safe** - Safe for use across multiple goroutines
+
+### Leader Election (Low-Level API)
 
 ```go
 // Create leader election instance
