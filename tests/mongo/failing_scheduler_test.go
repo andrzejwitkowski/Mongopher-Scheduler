@@ -8,6 +8,7 @@ import (
 
 	mongo_scheduler "github.com/andrzejwitkowski/Mongopher-Scheduler/task_scheduler/scheduler/mongo"
 	mongo_store "github.com/andrzejwitkowski/Mongopher-Scheduler/task_scheduler/store/mongo"
+	"github.com/andrzejwitkowski/Mongopher-Scheduler/task_scheduler/shared"
 
 	"github.com/andrzejwitkowski/Mongopher-Scheduler/task_scheduler/store"
 
@@ -17,7 +18,7 @@ import (
 )
 
 func TestFailingTask(t *testing.T) {
-	connStr, cleanup := setupMongoDB(t)
+	connStr, cleanup := shared.SetupMongoDB(t)
 	defer cleanup("testdb")
 
 	// Create MongoDB client
@@ -58,7 +59,7 @@ func TestFailingTask(t *testing.T) {
 }
 
 func TestMultipleFailingTasks(t *testing.T) {
-	connStr, cleanup := setupMongoDB(t)
+	connStr, cleanup := shared.SetupMongoDB(t)
 	defer cleanup("testdb")
 
 	// Create MongoDB client
