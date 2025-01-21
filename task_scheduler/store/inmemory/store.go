@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"github.com/andrzejwitkowski/Mongopher-Scheduler/task_scheduler/store"
-	"log"
 	"sync"
 	"time"
 )
@@ -68,7 +67,6 @@ func (ms *InMemoryStore) FindTasksDue(ctx context.Context) ([]InMemoryTask, erro
 	var tasks []InMemoryTask
 	for _, task := range ms.tasks.Range {
 		task := task.(*InMemoryTask)
-		log.Printf("task scheduledAt: %v", task.ScheduledAt)
 		if task.Status == store.StatusNew || (task.Status == store.StatusRetrying &&
 			task.ScheduledAt != nil && task.ScheduledAt.Before(time.Now())) {
 			tasks = append(tasks, *task)
