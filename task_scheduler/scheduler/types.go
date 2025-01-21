@@ -2,8 +2,8 @@ package scheduler
 
 import (
 	"context"
-	"time"
 	"github.com/andrzejwitkowski/Mongopher-Scheduler/task_scheduler/store"
+	"time"
 )
 
 type Task interface {
@@ -11,6 +11,7 @@ type Task interface {
 	GetName() string
 	GetStatus() store.TaskStatus
 	GetParams() map[string]interface{}
+	GetRetryConfig() store.RetryConfig
 }
 
 type TaskScheduler interface {
@@ -29,10 +30,10 @@ type WaitForTasksOptions struct {
 }
 type TaskStatusObserver interface {
 	WaitForAllTasksToBeDone() (bool, error)
-	WaitForAllTasksToBeDoneWithOptions (options WaitForTasksOptions) (bool, error)
+	WaitForAllTasksToBeDoneWithOptions(options WaitForTasksOptions) (bool, error)
 
-	WaitForAllTasksToBeInStatusWithOptions (status store.TaskStatus, options WaitForTasksOptions) (bool, error)
-	WaitForAllTasksToBeInStatus (status store.TaskStatus) (bool, error)
+	WaitForAllTasksToBeInStatusWithOptions(status store.TaskStatus, options WaitForTasksOptions) (bool, error)
+	WaitForAllTasksToBeInStatus(status store.TaskStatus) (bool, error)
 }
 
 func DefaultWaitForTasksOptions() WaitForTasksOptions {

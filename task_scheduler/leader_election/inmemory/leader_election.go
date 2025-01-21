@@ -9,7 +9,6 @@ import (
 	"github.com/andrzejwitkowski/Mongopher-Scheduler/task_scheduler/shared"
 )
 
-
 var (
 	leaderStore     *sync.Map
 	leaderStoreOnce sync.Once
@@ -76,11 +75,6 @@ func (le *LeaderElection) ElectLeader(ctx context.Context) (bool, error) {
 
 	le.isLeader = true
 
-	// Start refresh goroutine
-	ctx, cancel := context.WithCancel(ctx)
-	le.cancelFunc = cancel
-	go le.refreshLeadership(ctx)
-
 	return true, nil
 }
 
@@ -107,7 +101,22 @@ func (le *LeaderElection) IsLeader(ctx context.Context) (bool, error) {
 	return false, nil
 }
 
-func (le *LeaderElection) Resign(ctx context.Context) error {
+func (le *LeaderElection) Start(ctx context.Context) error {
+	// Start refresh goroutine
+	ctx, cancel := context.WithCancel(ctx)
+	le.cancelFunc = cancel
+	go le.refreshLeadership(ctx)
+	return nil
+}
+
+func (le *LeaderElection) Stop() error {
+	if le.cancelFunc != nil {
+		le.cancelFunc()
+	}
+	return nil
+}
+
+func (le *LeaderElection) Resign() error {
 	le.mu.Lock()
 	defer le.mu.Unlock()
 

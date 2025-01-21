@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"testing"
 
+	types "github.com/andrzejwitkowski/Mongopher-Scheduler/task_scheduler/scheduler"
 	inmemory_scheduler "github.com/andrzejwitkowski/Mongopher-Scheduler/task_scheduler/scheduler/inmemory"
 	"github.com/andrzejwitkowski/Mongopher-Scheduler/task_scheduler/store"
 	inmemory_store "github.com/andrzejwitkowski/Mongopher-Scheduler/task_scheduler/store/inmemory"
@@ -22,15 +23,15 @@ func TestFailingTask(t *testing.T) {
 	scheduler.StartScheduler(context.Background())
 
 	// Create a failing task handler
-	handler := func(task *store.Task[any, int]) error {
+	handler := func(task types.Task) error {
 		return errors.New("task failed")
 	}
 
 	// Register the handler
-	scheduler.RegisterHandler("failing-task", inmemory_scheduler.InMemoryTaskHandler(handler))
+	scheduler.RegisterHandler("failing-task", handler)
 
 	// Register and schedule the task
-	_, err := scheduler.RegisterTask("failing-task", inmemory_scheduler.NewAnyStructParameter(0), nil)
+	_, err := scheduler.RegisterTask("failing-task", map[string]interface{}{"param": 0}, nil)
 	assert.NoError(t, err)
 
 	// Start scheduler
@@ -58,17 +59,17 @@ func TestMultipleFailingTasks(t *testing.T) {
 	scheduler.StartScheduler(context.Background())
 
 	// Create a failing task handler
-	handler := func(task *store.Task[any, int]) error {
+	handler := func(task types.Task) error {
 		return errors.New("task failed")
 	}
 
 	// Register the handler
-	scheduler.RegisterHandler("failing-task", inmemory_scheduler.InMemoryTaskHandler(handler))
+	scheduler.RegisterHandler("failing-task", handler)
 
 	// Create and register 10 failing tasks
 	for i := 0; i < 10; i++ {
 		taskName := fmt.Sprintf("failing-task-%d", i)
-		_, err := scheduler.RegisterTask(taskName, inmemory_scheduler.NewAnyStructParameter(i), nil)
+		_, err := scheduler.RegisterTask(taskName, map[string]interface{}{"param": i}, nil)
 		assert.NoError(t, err)
 	}
 

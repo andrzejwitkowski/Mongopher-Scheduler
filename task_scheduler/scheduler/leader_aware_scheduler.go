@@ -6,8 +6,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/andrzejwitkowski/Mongopher-Scheduler/task_scheduler/leader_election"
 	"github.com/andrzejwitkowski/Mongopher-Scheduler/task_scheduler/heartbeat"
+	"github.com/andrzejwitkowski/Mongopher-Scheduler/task_scheduler/leader_election"
 	"github.com/andrzejwitkowski/Mongopher-Scheduler/task_scheduler/shared"
 	"github.com/andrzejwitkowski/Mongopher-Scheduler/task_scheduler/store"
 )
@@ -41,7 +41,7 @@ func NewLeaderAwareTaskScheduler(
 		func(ctx context.Context) error {
 			las.mu.Lock()
 			defer las.mu.Unlock()
-	
+
 			if las.isLeader {
 				shared.Must(las.leaderElection.ElectLeader(ctx))
 			}
@@ -61,6 +61,10 @@ func NewLeaderAwareTaskScheduler(
 
 	las.heartbeat.Start(ctx)
 	return las
+}
+
+func (las *LeaderAwareTaskScheduler) RegisterHandler(name string, handler func(Task) error) {
+	las.scheduler.RegisterHandler(name, handler)
 }
 
 func (las *LeaderAwareTaskScheduler) RegisterTask(ctx context.Context, name string, params map[string]interface{}, scheduledAt *time.Time) (Task, error) {
@@ -83,6 +87,10 @@ func (las *LeaderAwareTaskScheduler) FindTasksInStatus(ctx context.Context, stat
 	return las.scheduler.FindTasksInStatus(ctx, status)
 }
 
+func (las *LeaderAwareTaskScheduler) StartScheduler(ctx context.Context) {
+	las.scheduler.StartScheduler(ctx)
+}
+
 func (las *LeaderAwareTaskScheduler) Close() error {
 	las.mu.Lock()
 	defer las.mu.Unlock()
@@ -102,4 +110,20 @@ func (las *LeaderAwareTaskScheduler) Close() error {
 
 	las.scheduler.StopScheduler()
 	return nil
+}
+
+func (las *LeaderAwareTaskScheduler) WaitForAllTasksToBeDone() (bool, error) {
+	return las.scheduler.WaitForAllTasksToBeDone()
+}
+
+func (las *LeaderAwareTaskScheduler) WaitForAllTasksToBeDoneWithOptions(options WaitForTasksOptions) (bool, error) {
+	return las.scheduler.WaitForAllTasksToBeDoneWithOptions(options)
+}
+
+func (las *LeaderAwareTaskScheduler) WaitForAllTasksToBeInStatus(status store.TaskStatus) (bool, error) {
+	return las.scheduler.WaitForAllTasksToBeInStatus(status)
+}
+
+func (las *LeaderAwareTaskScheduler) WaitForAllTasksToBeInStatusWithOptions(status store.TaskStatus, options WaitForTasksOptions) (bool, error) {
+	return las.scheduler.WaitForAllTasksToBeInStatusWithOptions(status, options)
 }
