@@ -3,13 +3,32 @@ package inmemory
 import (
 	"context"
 	"errors"
-	"log"
 	"github.com/andrzejwitkowski/Mongopher-Scheduler/task_scheduler/store"
 	"sync"
 	"time"
 )
 
 type InMemoryTask store.Task[any, int]
+
+func (t InMemoryTask) GetID() interface{} {
+	return t.ID
+}
+
+func (t InMemoryTask) GetName() string {
+	return t.Name
+}
+
+func (t InMemoryTask) GetStatus() store.TaskStatus {
+	return t.Status
+}
+
+func (t InMemoryTask) GetParams() map[string]interface{} {
+	return t.Params.(map[string]interface{})
+}
+
+func (t InMemoryTask) GetRetryConfig() store.RetryConfig {
+	return t.RetryConfig
+}
 
 type InMemoryStore struct {
 	tasks sync.Map
@@ -48,8 +67,7 @@ func (ms *InMemoryStore) FindTasksDue(ctx context.Context) ([]InMemoryTask, erro
 	var tasks []InMemoryTask
 	for _, task := range ms.tasks.Range {
 		task := task.(*InMemoryTask)
-		log.Printf("task scheduledAt: %v", task.ScheduledAt)
-		if task.Status == store.StatusNew || ( task.Status == store.StatusRetrying && 
+		if task.Status == store.StatusNew || (task.Status == store.StatusRetrying &&
 			task.ScheduledAt != nil && task.ScheduledAt.Before(time.Now())) {
 			tasks = append(tasks, *task)
 		}

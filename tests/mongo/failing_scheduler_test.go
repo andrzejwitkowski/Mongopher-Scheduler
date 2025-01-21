@@ -7,11 +7,11 @@ import (
 	"testing"
 
 	mongo_scheduler "github.com/andrzejwitkowski/Mongopher-Scheduler/task_scheduler/scheduler/mongo"
+	mongo_store "github.com/andrzejwitkowski/Mongopher-Scheduler/task_scheduler/store/mongo"
+
 	"github.com/andrzejwitkowski/Mongopher-Scheduler/task_scheduler/store"
 
 	"github.com/stretchr/testify/assert"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
@@ -31,7 +31,7 @@ func TestFailingTask(t *testing.T) {
 	defer scheduler.StopScheduler()
 
 	// Create a failing task handler
-	handler := func(task *store.Task[bson.M, primitive.ObjectID]) error {
+	handler := func(task mongo_store.MongoTask) error {
 		return errors.New("task failed")
 	}
 
@@ -72,7 +72,7 @@ func TestMultipleFailingTasks(t *testing.T) {
 	defer scheduler.StopScheduler()
 
 	// Create a failing task handler
-	handler := func(task *store.Task[bson.M, primitive.ObjectID]) error {
+	handler := func(task mongo_store.MongoTask) error {
 		return errors.New("task failed")
 	}
 	// Create and register 10 failing tasks

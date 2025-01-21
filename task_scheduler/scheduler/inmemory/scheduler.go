@@ -4,12 +4,13 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"sync"
+	"time"
+
 	"github.com/andrzejwitkowski/Mongopher-Scheduler/task_scheduler/scheduler"
 	"github.com/andrzejwitkowski/Mongopher-Scheduler/task_scheduler/shared"
 	"github.com/andrzejwitkowski/Mongopher-Scheduler/task_scheduler/store"
 	"github.com/andrzejwitkowski/Mongopher-Scheduler/task_scheduler/store/inmemory"
-	"sync"
-	"time"
 )
 
 type InMemoryTaskIDProvider struct {
@@ -35,19 +36,17 @@ func GetInMemoryTaskIDProvider() *InMemoryTaskIDProvider {
 	return instance
 }
 
-type InMemoryTaskHandler func(*store.Task[any, int]) error
-
 type InMemoryTaskScheduler struct {
-	context  *context.Context
+	context    *context.Context
 	cancelFunc context.CancelFunc
-	store    *inmemory.InMemoryStore
-	handlers map[string]InMemoryTaskHandler
+	store      *inmemory.InMemoryStore
+	handlers   map[string]func(scheduler.Task) error
 }
 
 func NewInMemoryTaskScheduler() *InMemoryTaskScheduler {
 	return &InMemoryTaskScheduler{
 		store:    inmemory.NewInMemoryStore(),
-		handlers: make(map[string]InMemoryTaskHandler),
+		handlers: make(map[string]func(scheduler.Task) error),
 	}
 }
 
@@ -92,7 +91,7 @@ func (ts *InMemoryTaskScheduler) WaitForAllTasksToBeInStatusWithOptions(status s
 // Existing scheduler methods...
 
 // RegisterHandler registers a new task handler
-func (ts *InMemoryTaskScheduler) RegisterHandler(name string, handler InMemoryTaskHandler) {
+func (ts *InMemoryTaskScheduler) RegisterHandler(name string, handler func(scheduler.Task) error) {
 	ts.handlers[name] = handler
 }
 
@@ -108,6 +107,7 @@ func (ts *InMemoryTaskScheduler) StartScheduler(ctx context.Context) {
 			case <-ctx.Done():
 				return
 			default:
+				log.Printf("Processing tasks")
 				ts.processTasks(ctx)
 				time.Sleep(1 * time.Second)
 			}
@@ -122,13 +122,13 @@ func (ts *InMemoryTaskScheduler) StopScheduler() {
 }
 
 // RegisterTask creates a new task in the database
-func (ts *InMemoryTaskScheduler) RegisterTask(name string, params store.TaskParameter, scheduledAt *time.Time) (*inmemory.InMemoryTask, error) {
+func (ts *InMemoryTaskScheduler) RegisterTask(name string, params map[string]interface{}, scheduledAt *time.Time) (scheduler.Task, error) {
 	task := inmemory.InMemoryTask{
 		ID:          GetInMemoryTaskIDProvider().GetNextID(),
 		Name:        name,
 		Status:      store.StatusNew,
 		CreatedAt:   time.Now(),
-		Params:      shared.Must(params.ToMap()),
+		Params:      params,
 		ScheduledAt: scheduledAt,
 		RetryConfig: store.RetryConfig{
 			MaxRetries:   5,
@@ -188,8 +188,7 @@ func (ts *InMemoryTaskScheduler) processTaskWithRetry(ctx context.Context, taskI
 			}
 		}
 
-		storeTask := (*store.Task[any, int])(task)
-		err := handler(storeTask)
+		err := handler(task)
 
 		if err == nil {
 			log.Printf("{GoroutineID: %d} Marking task %d (current status: %s) as DONE",
@@ -201,7 +200,7 @@ func (ts *InMemoryTaskScheduler) processTaskWithRetry(ctx context.Context, taskI
 		next_attempt := task.RetryConfig.Attempts + 1
 		delay := task.RetryConfig.GetStrategy().NextDelay(task.RetryConfig.Attempts)
 		nextExecution := time.Now().Add(delay)
-		
+
 		log.Printf("{GoroutineID: %d} Marking task %d (current status: %s) as RETRYING (attempt %d/%d)",
 			shared.GoroutineID(), task.ID, task.Status, next_attempt, task.RetryConfig.MaxRetries)
 		log.Printf("{GoroutineID: %d} Updating task %d (current status: %s) with next execution time: %s",
@@ -216,15 +215,15 @@ func (ts *InMemoryTaskScheduler) processTaskWithRetry(ctx context.Context, taskI
 	}
 }
 
-func (ts *InMemoryTaskScheduler) FindTasksInStatus(ctx context.Context, task_status store.TaskStatus) ([]store.Task[any, int], error) {
+func (ts *InMemoryTaskScheduler) FindTasksInStatus(ctx context.Context, task_status store.TaskStatus) ([]scheduler.Task, error) {
 	tasks, err := ts.store.FindTasksInStatus(ctx, task_status)
 	if err != nil {
 		return nil, err
 	}
 
-	converted_tasks := make([]store.Task[any, int], len(tasks))
+	converted_tasks := make([]scheduler.Task, len(tasks))
 	for i, task := range tasks {
-		converted_tasks[i] = store.Task[any, int](task)
+		converted_tasks[i] = scheduler.Task(task)
 	}
 	return converted_tasks, nil
 }

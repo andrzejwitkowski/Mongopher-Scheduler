@@ -5,9 +5,10 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
+	scheduler_types "github.com/andrzejwitkowski/Mongopher-Scheduler/task_scheduler/scheduler"
 	"github.com/andrzejwitkowski/Mongopher-Scheduler/task_scheduler/scheduler/inmemory"
 	"github.com/andrzejwitkowski/Mongopher-Scheduler/task_scheduler/store"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestSingleTaskSuccess(t *testing.T) {
@@ -16,7 +17,7 @@ func TestSingleTaskSuccess(t *testing.T) {
 	scheduler.StartScheduler(context.Background())
 
 	// Create a simple task handler that always succeeds
-	handler := func(task *store.Task[any, int]) error {
+	handler := func(task scheduler_types.Task) error {
 		return nil
 	}
 
@@ -24,7 +25,7 @@ func TestSingleTaskSuccess(t *testing.T) {
 	scheduler.RegisterHandler("test-task-1", handler)
 
 	// Register and schedule the task
-	_, err := scheduler.RegisterTask("test-task-1", inmemory.NewAnyStructParameter(0), nil)
+	_, err := scheduler.RegisterTask("test-task-1", map[string]interface{}{"param": 0}, nil)
 	assert.NoError(t, err)
 
 	// Start scheduler
@@ -49,7 +50,7 @@ func TestMultipleTasksSuccess(t *testing.T) {
 	scheduler.StartScheduler(context.Background())
 
 	// Create a simple task handler that always succeeds
-	handler := func(task *store.Task[any, int]) error {
+	handler := func(task scheduler_types.Task) error {
 		return nil
 	}
 
@@ -62,7 +63,7 @@ func TestMultipleTasksSuccess(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		taskName := fmt.Sprintf("test-task-%d", i)
 		scheduler.RegisterHandler(taskName, handler)
-		_, err := scheduler.RegisterTask(taskName, inmemory.NewAnyStructParameter(i), nil)
+		_, err := scheduler.RegisterTask(taskName, map[string]interface{}{"param": i}, nil)
 		assert.NoError(t, err)
 	}
 
@@ -83,9 +84,9 @@ func TestFailingTaskWithRetries(t *testing.T) {
 	scheduler.StartScheduler(context.Background())
 
 	// Create a task handler that fails 4 times before succeeding
-	handler := func(task *store.Task[any, int]) error {
-		if task.RetryConfig.Attempts < 4 {
-			return fmt.Errorf("simulated failure attempt %d", task.RetryConfig.Attempts + 1)
+	handler := func(task scheduler_types.Task) error {
+		if task.GetRetryConfig().Attempts < 4 {
+			return fmt.Errorf("simulated failure attempt %d", task.GetRetryConfig().Attempts+1)
 		}
 		return nil
 	}
@@ -93,7 +94,7 @@ func TestFailingTaskWithRetries(t *testing.T) {
 	// Register the handler and task
 	taskName := "failing-task"
 	scheduler.RegisterHandler(taskName, handler)
-	_, err := scheduler.RegisterTask(taskName, inmemory.NewAnyStructParameter(0), nil)
+	_, err := scheduler.RegisterTask(taskName, map[string]interface{}{"param": 0}, nil)
 	assert.NoError(t, err)
 
 	// Start scheduler
@@ -113,5 +114,5 @@ func TestFailingTaskWithRetries(t *testing.T) {
 
 	// Verify the task history shows the retries
 	task := tasks[0]
-	assert.Equal(t, 4, task.RetryConfig.Attempts)
+	assert.Equal(t, 4, task.GetRetryConfig().Attempts)
 }

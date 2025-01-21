@@ -219,6 +219,7 @@ The scheduler includes comprehensive tests covering:
   - Failover after TTL expiration
   - Graceful resignation
   - Concurrent elections
+  - Multiple scheduler coordination (leader handles tasks while non-leader remains idle)
 
 Run tests with:
 
