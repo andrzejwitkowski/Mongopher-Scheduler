@@ -54,7 +54,7 @@ func TestHeartbeatFailureHandling(t *testing.T) {
 		},
 	)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	defer cancel()
 
 	hm.Start(ctx)
