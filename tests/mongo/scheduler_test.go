@@ -10,7 +10,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 	
 	mongo_scheduler "github.com/andrzejwitkowski/Mongopher-Scheduler/task_scheduler/scheduler/mongo"
-	mongo_store "github.com/andrzejwitkowski/Mongopher-Scheduler/task_scheduler/store/mongo"
+	scheduler_types "github.com/andrzejwitkowski/Mongopher-Scheduler/task_scheduler/scheduler"
 	"github.com/andrzejwitkowski/Mongopher-Scheduler/task_scheduler/store"
 	"github.com/andrzejwitkowski/Mongopher-Scheduler/task_scheduler/shared"
 )
@@ -30,12 +30,12 @@ func TestSingleTaskSuccess(t *testing.T) {
 	defer scheduler.StopScheduler()
 
 	// Create a simple task handler that always succeeds
-	handler := func(task mongo_store.MongoTask) error {
+	handler := func(task scheduler_types.Task) error {
 		return nil
 	}
 
 	// Create task with the handler
-	scheduler.RegisterHandler("test-task-1", mongo_scheduler.MongoTaskHandler(handler))
+	scheduler.RegisterHandler("test-task-1", handler)
 
 	// Register and schedule the task
 	_, err = scheduler.RegisterTask("test-task-1", mongo_scheduler.MongoTaskParameter{"value": 0}, nil)
@@ -67,13 +67,13 @@ func TestMultipleTasksSuccess(t *testing.T) {
 	defer scheduler.StopScheduler()
 
 	// Create a simple task handler that always succeeds
-	handler := func(task mongo_store.MongoTask) error {
+	handler := func(task scheduler_types.Task) error {
 		return nil
 	}
 
 	for i := 0; i < 10; i++ {
 		taskName := fmt.Sprintf("test-task-%d", i)
-		scheduler.RegisterHandler(taskName, mongo_scheduler.MongoTaskHandler(handler))
+		scheduler.RegisterHandler(taskName, handler)
 	}
 
 	// Create and register 10 tasks
@@ -109,16 +109,16 @@ func TestFailingTaskWithRetries(t *testing.T) {
 	defer scheduler.StopScheduler()
 
 	// Create a task handler that fails 4 times before succeeding
-	handler := func(task mongo_store.MongoTask) error {
-		if task.RetryConfig.Attempts < 5 {
-			return fmt.Errorf("simulated failure attempt %d", task.RetryConfig.Attempts + 1)
+	handler := func(task scheduler_types.Task) error {
+		if task.GetRetryConfig().Attempts < 4 {
+			return fmt.Errorf("simulated failure attempt %d", task.GetRetryConfig().Attempts+1)
 		}
 		return nil
 	}
 
 	// Register the handler and task
 	taskName := "failing-task"
-	scheduler.RegisterHandler(taskName, mongo_scheduler.MongoTaskHandler(handler))
+	scheduler.RegisterHandler(taskName, handler)
 	_, err = scheduler.RegisterTask(taskName, mongo_scheduler.MongoTaskParameter{"value": 0}, nil)
 	assert.NoError(t, err)
 
@@ -134,5 +134,5 @@ func TestFailingTaskWithRetries(t *testing.T) {
 
 	// Verify the task history shows the retries
 	task := tasks[0]
-	assert.Equal(t, 5, task.RetryConfig.Attempts)
+	assert.Equal(t, 4, task.GetRetryConfig().Attempts)
 }

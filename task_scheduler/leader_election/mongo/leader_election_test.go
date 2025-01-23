@@ -39,7 +39,7 @@ func TestMongoLeaderElection_HappyPath(t *testing.T) {
 	assert.True(t, isLeader)
 
 	// Gracefully resign
-	err = le1.Resign(context.Background())
+	err = le1.Resign()
 	assert.NoError(t, err)
 
 	// Verify no longer leader
@@ -64,7 +64,7 @@ func TestMongoLeaderElection_Failover(t *testing.T) {
 
 	le2, _ := NewMongoLeaderElection("instance-2", client, "testdb")
 	
-	le1.Resign(context.Background())
+	le1.Resign()
 
 	// Second instance should now become leader
 	isLe2Leader, err := le2.ElectLeader(context.Background())

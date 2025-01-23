@@ -15,6 +15,26 @@ import (
 
 type MongoTask store.Task[bson.M, primitive.ObjectID]
 
+func (t MongoTask) GetID() interface{} {
+	return t.ID
+}
+
+func (t MongoTask) GetName() string {
+	return t.Name
+}
+
+func (t MongoTask) GetStatus() store.TaskStatus {
+	return t.Status
+}
+
+func (t MongoTask) GetParams() map[string]interface{} {
+	return t.Params
+}
+
+func (t MongoTask) GetRetryConfig() store.RetryConfig {
+	return t.RetryConfig
+}
+
 type MongoStore struct {
     collection *mongo.Collection
 }

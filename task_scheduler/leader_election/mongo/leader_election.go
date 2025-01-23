@@ -99,9 +99,6 @@ func (mle *MongoLeaderElection) ElectLeader(ctx context.Context) (bool, error) {
 
     // If we successfully inserted, we're the leader
     mle.isLeader = true
-    ctx, cancel := context.WithCancel(ctx)
-    mle.cancelFunc = cancel
-    go mle.refreshLeadership(ctx)
     return true, nil
 }
 
@@ -158,14 +155,29 @@ func (mle *MongoLeaderElection) IsLeader(ctx context.Context) (bool, error) {
 	return false, nil
 }
 
-func (mle *MongoLeaderElection) Resign(ctx context.Context) error {
+func (le *MongoLeaderElection) Start(ctx context.Context) error {
+	// Start refresh goroutine
+	ctx, cancel := context.WithCancel(ctx)
+	le.cancelFunc = cancel
+	go le.refreshLeadership(ctx)
+	return nil
+}
+
+func (le *MongoLeaderElection) Stop() error {
+	if le.cancelFunc != nil {
+		le.cancelFunc()
+	}
+	return nil
+}
+
+func (mle *MongoLeaderElection) Resign() error {
 	mle.mu.Lock()
 	defer mle.mu.Unlock()
 
 	if mle.isLeader {
 		collection := mle.client.Database(mle.database).Collection(mle.collection)
 		filter := bson.M{"instance_id": mle.instanceID}
-		_, err := collection.DeleteOne(ctx, filter)
+		_, err := collection.DeleteOne(context.Background(), filter)
 		if err != nil {
 			return err
 		}
