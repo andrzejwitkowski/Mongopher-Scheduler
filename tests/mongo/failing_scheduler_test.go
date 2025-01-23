@@ -7,7 +7,8 @@ import (
 	"testing"
 
 	mongo_scheduler "github.com/andrzejwitkowski/Mongopher-Scheduler/task_scheduler/scheduler/mongo"
-	mongo_store "github.com/andrzejwitkowski/Mongopher-Scheduler/task_scheduler/store/mongo"
+	scheduler_types "github.com/andrzejwitkowski/Mongopher-Scheduler/task_scheduler/scheduler"
+	"github.com/andrzejwitkowski/Mongopher-Scheduler/task_scheduler/shared"
 
 	"github.com/andrzejwitkowski/Mongopher-Scheduler/task_scheduler/store"
 
@@ -17,7 +18,7 @@ import (
 )
 
 func TestFailingTask(t *testing.T) {
-	connStr, cleanup := setupMongoDB(t)
+	connStr, cleanup := shared.SetupMongoDB(t)
 	defer cleanup("testdb")
 
 	// Create MongoDB client
@@ -31,7 +32,7 @@ func TestFailingTask(t *testing.T) {
 	defer scheduler.StopScheduler()
 
 	// Create a failing task handler
-	handler := func(task mongo_store.MongoTask) error {
+	handler := func(task scheduler_types.Task) error {
 		return errors.New("task failed")
 	}
 
@@ -58,7 +59,7 @@ func TestFailingTask(t *testing.T) {
 }
 
 func TestMultipleFailingTasks(t *testing.T) {
-	connStr, cleanup := setupMongoDB(t)
+	connStr, cleanup := shared.SetupMongoDB(t)
 	defer cleanup("testdb")
 
 	// Create MongoDB client
@@ -72,13 +73,13 @@ func TestMultipleFailingTasks(t *testing.T) {
 	defer scheduler.StopScheduler()
 
 	// Create a failing task handler
-	handler := func(task mongo_store.MongoTask) error {
+	handler := func(task scheduler_types.Task) error {
 		return errors.New("task failed")
 	}
 	// Create and register 10 failing tasks
 	for i := 0; i < 10; i++ {
 		taskName := fmt.Sprintf("failing-task-%d", i)
-		scheduler.RegisterHandler(taskName, mongo_scheduler.MongoTaskHandler(handler))
+		scheduler.RegisterHandler(taskName, handler)
 		_, err := scheduler.RegisterTask(taskName, mongo_scheduler.MongoTaskParameter{"value": i}, nil)
 		assert.NoError(t, err)
 	}

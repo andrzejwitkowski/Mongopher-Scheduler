@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"github.com/andrzejwitkowski/Mongopher-Scheduler/task_scheduler/shared"
+	"github.com/andrzejwitkowski/Mongopher-Scheduler/task_scheduler/scheduler"
 	"github.com/andrzejwitkowski/Mongopher-Scheduler/task_scheduler/store"
 	"github.com/andrzejwitkowski/Mongopher-Scheduler/task_scheduler/store/mongo"
 	"sync"
@@ -21,25 +22,23 @@ func (mp MongoTaskParameter) ToMap() (map[string]interface{}, error) {
     return map[string]interface{}(mp), nil
 }
 
-type MongoTaskHandler func(mongo.MongoTask) error
-
 type MongoTaskScheduler struct {
 	context *context.Context
 	cancelFunc context.CancelFunc
     store *mongo.MongoStore
-    handlers map[string]MongoTaskHandler
+    handlers map[string]func(scheduler.Task) error
 	mu       sync.RWMutex  
 }
 
 func NewMongoTaskScheduler(client *mongo_client.Client, dbName string) *MongoTaskScheduler {
     return &MongoTaskScheduler{
         store: mongo.NewMongoStore(client, dbName),
-        handlers: make(map[string]MongoTaskHandler),
+        handlers: make(map[string]func(scheduler.Task) error),
     }
 }
 
 // RegisterHandler registers a new task handler
-func (ts *MongoTaskScheduler) RegisterHandler(name string, handler MongoTaskHandler) {
+func (ts *MongoTaskScheduler) RegisterHandler(name string, handler func(scheduler.Task) error) {
 	ts.handlers[name] = handler
 }
 
@@ -69,12 +68,12 @@ func (ts *MongoTaskScheduler) StopScheduler() {
 }
 
 // RegisterTask creates a new task in the database
-func (ts *MongoTaskScheduler) RegisterTask(name string, params store.TaskParameter, scheduledAt *time.Time) (*mongo.MongoTask, error) {
+func (ts *MongoTaskScheduler) RegisterTask(name string, params map[string]interface{}, scheduledAt *time.Time) (scheduler.Task, error) {
 	task := mongo.MongoTask{
 		Name:        name,
 		Status:      store.StatusNew,
 		CreatedAt:   time.Now(),
-		Params:      shared.Must(mapToBSON(shared.Must(params.ToMap()))),
+		Params:      params,
 		ScheduledAt: scheduledAt,
 		RetryConfig: store.RetryConfig{
 			MaxRetries:   5,
@@ -85,7 +84,21 @@ func (ts *MongoTaskScheduler) RegisterTask(name string, params store.TaskParamet
 		History: []store.TaskHistory{}, // Initialize history as empty array
 	}
 
-	return ts.store.InsertTask(context.Background(), task)
+	task_result, err := ts.store.InsertTask(context.Background(), task)
+	return scheduler.Task(task_result), err
+}
+
+func (ts *MongoTaskScheduler) FindTasksInStatus(ctx context.Context, task_status store.TaskStatus) ([]scheduler.Task, error) {
+	tasks, err := ts.store.FindTasksInStatus(ctx, task_status)
+	if err != nil {
+		return nil, err
+	}
+
+	converted_tasks := make([]scheduler.Task, len(tasks))
+	for i, task := range tasks {
+		converted_tasks[i] = scheduler.Task(task)
+	}
+	return converted_tasks, nil
 }
 
 func mapToBSON(m map[string]interface{}) (bson.M, error) {
@@ -117,7 +130,7 @@ func (ts *MongoTaskScheduler) processTasks(ctx context.Context) {
 	}
 }
 
-func (ts *MongoTaskScheduler) getHandler(taskName string) (MongoTaskHandler, bool) {
+func (ts *MongoTaskScheduler) getHandler(taskName string) (func(scheduler.Task) error, bool) {
 	ts.mu.RLock()
 	defer ts.mu.RUnlock()
 	handler, exists := ts.handlers[taskName]
@@ -163,16 +176,4 @@ func (ts *MongoTaskScheduler) processTaskWithRetry(ctx context.Context, taskId p
 	} else {
 		ts.store.UpdateTaskState(ctx, task.ID, store.StatusException, "Max retries exceeded", task.RetryConfig.Attempts, nil)
 	}
-}
-
-func (ts *MongoTaskScheduler) FindTasksInStatus(ctx context.Context, task_status store.TaskStatus) ([]store.Task[bson.M, primitive.ObjectID], error) {
-	mongoTasks, err := ts.store.FindTasksInStatus(ctx, task_status)
-	if err != nil {
-		return nil, err
-	}
-	tasks := make([]store.Task[bson.M, primitive.ObjectID], len(mongoTasks))
-	for i, task := range mongoTasks {
-		tasks[i] = store.Task[bson.M, primitive.ObjectID](task)
-	}
-	return tasks, nil
 }

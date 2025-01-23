@@ -8,8 +8,8 @@ import (
 
 	"github.com/andrzejwitkowski/Mongopher-Scheduler/task_scheduler/heartbeat"
 	"github.com/andrzejwitkowski/Mongopher-Scheduler/task_scheduler/leader_election"
-	"github.com/andrzejwitkowski/Mongopher-Scheduler/task_scheduler/shared"
 	"github.com/andrzejwitkowski/Mongopher-Scheduler/task_scheduler/store"
+	"github.com/andrzejwitkowski/Mongopher-Scheduler/task_scheduler/shared"
 )
 
 var ErrNotLeader = errors.New("not the current leader")
