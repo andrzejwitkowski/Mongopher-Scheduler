@@ -2,17 +2,18 @@ package leader_election
 
 import (
 	"context"
-	"log"
 	"sync"
 	"time"
 
 	"github.com/andrzejwitkowski/Mongopher-Scheduler/task_scheduler/shared"
+	"github.com/andrzejwitkowski/Mongopher-Scheduler/task_scheduler/logging"
 )
 
 var (
 	leaderStore     *sync.Map
 	leaderStoreOnce sync.Once
 	leaderTTL       = 30 * time.Second
+	logger          = logging.GetLogger().Sugar()
 )
 
 type LeaderElection struct {
@@ -90,7 +91,7 @@ func (le *LeaderElection) IsLeader(ctx context.Context) (bool, error) {
 	store := getLeaderStore()
 	if leader, ok := store.Load("leader"); ok {
 		leaderInfo := leader.(leaderInfo)
-		log.Printf("Now is: %v, LastSeen: %v - Time since last seen: %v",
+		logger.Infof("Now is: %v, LastSeen: %v - Time since last seen: %v",
 			le.timeProvider.Now(), leaderInfo.lastSeen, le.timeProvider.Now().Sub(leaderInfo.lastSeen))
 		if leaderInfo.instanceID == le.instanceID && le.timeProvider.Now().Sub(leaderInfo.lastSeen) < leaderTTL {
 			return true, nil
