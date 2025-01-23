@@ -3,15 +3,17 @@ package inmemory
 import (
 	"context"
 	"fmt"
-	"log"
 	"sync"
 	"time"
 
+	"github.com/andrzejwitkowski/Mongopher-Scheduler/task_scheduler/logging"
 	"github.com/andrzejwitkowski/Mongopher-Scheduler/task_scheduler/scheduler"
 	"github.com/andrzejwitkowski/Mongopher-Scheduler/task_scheduler/shared"
 	"github.com/andrzejwitkowski/Mongopher-Scheduler/task_scheduler/store"
 	"github.com/andrzejwitkowski/Mongopher-Scheduler/task_scheduler/store/inmemory"
 )
+
+var logger = logging.GetLogger().Sugar()
 
 type InMemoryTaskIDProvider struct {
 	ID int
@@ -107,7 +109,7 @@ func (ts *InMemoryTaskScheduler) StartScheduler(ctx context.Context) {
 			case <-ctx.Done():
 				return
 			default:
-				log.Printf("Processing tasks")
+				logger.Debugf("Processing tasks")
 				ts.processTasks(ctx)
 				time.Sleep(1 * time.Second)
 			}
@@ -144,21 +146,19 @@ func (ts *InMemoryTaskScheduler) RegisterTask(name string, params map[string]int
 func (ts *InMemoryTaskScheduler) processTasks(ctx context.Context) {
 	// Find all tasks that are ready to be executed
 	tasks := shared.Must(ts.store.FindTasksDue(ctx))
-	log.Printf("{GoroutineID: %d}, Found %d tasks to process", shared.GoroutineID(), len(tasks))
+	logger.Debugf("Found %d tasks to process", len(tasks))
 	for _, task := range tasks {
-		log.Printf("{GoroutineID: %d}, task Id: %d, status: %s", shared.GoroutineID(), task.ID, task.Status)
+		logger.Debugf("task Id: %d, status: %s", task.ID, task.Status)
 	}
 
 	// Mark all tasks as IN_PROGRESS synchronously
 	for _, task := range tasks {
-		log.Printf("{GoroutineID: %d} Attempting to mark task %d (current status: %s) as IN_PROGRESS",
-			shared.GoroutineID(), task.ID, task.Status)
+		logger.Debugf("Attempting to mark task %d (current status: %s) as IN_PROGRESS", task.ID, task.Status)
 		if err := ts.store.UpdateTaskState(ctx, task.ID, store.StatusInProgress, "", task.RetryConfig.Attempts, nil); err != nil {
-			log.Printf("Error updating task status: %v", err)
+			logger.Errorf("Error updating task status: %v", err)
 			continue
 		}
-		log.Printf("{GoroutineID: %d} Marked task %d (current status: %s) as IN_PROGRESS",
-			shared.GoroutineID(), task.ID, task.Status)
+		logger.Debugf("Marked task %d (current status: %s) as IN_PROGRESS",task.ID, task.Status)
 	}
 
 	// Launch processing without waiting
@@ -180,10 +180,9 @@ func (ts *InMemoryTaskScheduler) processTaskWithRetry(ctx context.Context, taskI
 
 	if task.RetryConfig.Attempts < task.RetryConfig.MaxRetries {
 		if task.Status != store.StatusInProgress {
-			log.Printf("{GoroutineID: %d} Marking task %d (current status: %s) as IN_PROGRESS",
-				shared.GoroutineID(), task.ID, task.Status)
+			logger.Debugf("Marking task %d (current status: %s) as IN_PROGRESS",task.ID, task.Status)
 			if err := ts.store.UpdateTaskState(ctx, task.ID, store.StatusInProgress, "", task.RetryConfig.Attempts, nil); err != nil {
-				log.Printf("Error marking task as IN_PROGRESS: %v", err)
+				logger.Errorf("Error marking task as IN_PROGRESS: %v", err)
 				return
 			}
 		}
@@ -191,8 +190,7 @@ func (ts *InMemoryTaskScheduler) processTaskWithRetry(ctx context.Context, taskI
 		err := handler(task)
 
 		if err == nil {
-			log.Printf("{GoroutineID: %d} Marking task %d (current status: %s) as DONE",
-				shared.GoroutineID(), task.ID, task.Status)
+			logger.Debugf("Marking task %d (current status: %s) as DONE", task.ID, task.Status)
 			ts.store.UpdateTaskState(ctx, task.ID, store.StatusDone, "", task.RetryConfig.Attempts, nil)
 			return
 		}
@@ -201,14 +199,12 @@ func (ts *InMemoryTaskScheduler) processTaskWithRetry(ctx context.Context, taskI
 		delay := task.RetryConfig.GetStrategy().NextDelay(task.RetryConfig.Attempts)
 		nextExecution := time.Now().Add(delay)
 
-		log.Printf("{GoroutineID: %d} Marking task %d (current status: %s) as RETRYING (attempt %d/%d)",
-			shared.GoroutineID(), task.ID, task.Status, next_attempt, task.RetryConfig.MaxRetries)
-		log.Printf("{GoroutineID: %d} Updating task %d (current status: %s) with next execution time: %s",
-			shared.GoroutineID(), task.ID, task.Status, nextExecution)
+		logger.Debugf("Marking task %d (current status: %s) as RETRYING (attempt %d/%d)", task.ID, task.Status, next_attempt, task.RetryConfig.MaxRetries)
+		logger.Debugf("Updating task %d (current status: %s) with next execution time: %s", task.ID, task.Status, nextExecution)
 
 		// Update task state for retry
 		if err := ts.store.UpdateTaskState(ctx, task.ID, store.StatusRetrying, err.Error(), next_attempt, &nextExecution); err != nil {
-			log.Printf("Error updating task state: %v", err)
+			logger.Errorf("Error updating task state: %v", err)
 		}
 	} else {
 		ts.store.UpdateTaskState(ctx, task.ID, store.StatusException, "Max retries exceeded", task.RetryConfig.Attempts, nil)

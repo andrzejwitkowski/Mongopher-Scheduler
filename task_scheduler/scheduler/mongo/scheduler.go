@@ -3,18 +3,21 @@ package mongo
 import (
 	"context"
 	"fmt"
-	"log"
-	"github.com/andrzejwitkowski/Mongopher-Scheduler/task_scheduler/shared"
-	"github.com/andrzejwitkowski/Mongopher-Scheduler/task_scheduler/scheduler"
-	"github.com/andrzejwitkowski/Mongopher-Scheduler/task_scheduler/store"
-	"github.com/andrzejwitkowski/Mongopher-Scheduler/task_scheduler/store/mongo"
 	"sync"
 	"time"
+
+	"github.com/andrzejwitkowski/Mongopher-Scheduler/task_scheduler/logging"
+	"github.com/andrzejwitkowski/Mongopher-Scheduler/task_scheduler/scheduler"
+	"github.com/andrzejwitkowski/Mongopher-Scheduler/task_scheduler/shared"
+	"github.com/andrzejwitkowski/Mongopher-Scheduler/task_scheduler/store"
+	"github.com/andrzejwitkowski/Mongopher-Scheduler/task_scheduler/store/mongo"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	mongo_client "go.mongodb.org/mongo-driver/mongo"
 )
+
+var logger = logging.GetLogger().Sugar()
 
 type MongoTaskParameter primitive.M
 
@@ -150,10 +153,9 @@ func (ts *MongoTaskScheduler) processTaskWithRetry(ctx context.Context, taskId p
 
 	if task.RetryConfig.Attempts <= task.RetryConfig.MaxRetries {
 		if (task.Status != store.StatusInProgress){
-			log.Printf("{GoroutineID: %d} Marking task %s (current status: %s) as IN_PROGRESS", 
-				shared.GoroutineID(), task.ID.Hex(), task.Status)
+			logger.Debugf("Marking task %s (current status: %s) as IN_PROGRESS", task.ID.Hex(), task.Status)
 			if err := ts.store.UpdateTaskState(ctx, task.ID, store.StatusInProgress, "", task.RetryConfig.Attempts, nil); err != nil {
-				log.Printf("Error marking task as IN_PROGRESS: %v", err)
+				logger.Errorf("Error marking task as IN_PROGRESS: %v", err)
 				return
 			}
 		}
@@ -171,7 +173,7 @@ func (ts *MongoTaskScheduler) processTaskWithRetry(ctx context.Context, taskId p
 
 		// Update task state for retry
 		if err := ts.store.UpdateTaskState(ctx, task.ID, store.StatusRetrying, err.Error(), next_attempt, &nextExecution); err != nil {
-			log.Printf("Error updating task state: %v", err)
+			logger.Errorf("Error updating task state: %v", err)
 		}
 	} else {
 		ts.store.UpdateTaskState(ctx, task.ID, store.StatusException, "Max retries exceeded", task.RetryConfig.Attempts, nil)
