@@ -12,7 +12,7 @@ A distributed task scheduler for Go applications with MongoDB and in-memory stor
 - Task history tracking
 - In-memory and MongoDB storage options
 - Concurrent-safe operations
-- Distributed leader election with TTL-based failover (in-memory only)
+- Distributed leader election with TTL-based failover (in-memory and MongoDB)
 
 ## Leader Election
 
@@ -34,6 +34,8 @@ The leader election is used to ensure only one scheduler instance processes task
 - **Mock time provider** - Enables precise testing of time-based operations
 
 ### Usage
+
+#### In-Memory Example
 
 ```go
 // Create leader election instance
@@ -67,6 +69,59 @@ if err != nil {
 }
 ```
 
+#### MongoDB Example
+
+```go
+// Create MongoDB client
+clientOptions := options.Client().ApplyURI("mongodb://localhost:27017")
+client, err := mongo.Connect(context.Background(), clientOptions)
+
+// Create leader election
+leaderElection := mongo.NewLeaderElection("instance-1", client, "scheduler_db")
+
+// Start leadership
+ctx := context.Background()
+leaderElection.Start(ctx)
+
+// Check leadership status
+isLeader, err := leaderElection.IsLeader(ctx)
+if err != nil {
+    log.Fatal(err)
+}
+
+if isLeader {
+    log.Println("This instance is now the leader")
+    // Start task processing
+    scheduler.StartScheduler(ctx)
+}
+```
+
+### MongoDB Leader Election
+
+The MongoDB implementation provides distributed leader election with:
+
+- **MongoDB-based locking** - Uses atomic document updates for leadership acquisition
+- **TTL-based leadership** - Leaders must renew status periodically (default: 30s)
+- **Automatic failover** - Leadership automatically transfers if current leader fails
+- **Concurrent-safe** - Uses MongoDB transactions for thread-safe operations
+
+#### Collection Structure
+
+The leader election uses a `leader_election` collection with:
+
+```json
+{
+  "leader_key": "singleton", // Unique key for leader document
+  "instance_id": "instance-1", // Current leader instance
+  "last_seen": ISODate("2025-01-23T20:12:05Z") // Last heartbeat timestamp
+}
+```
+
+#### Indexes
+
+- Unique index on `leader_key`
+- TTL-like behavior through `last_seen` index
+
 ### Configuration
 
 Leader election can be configured with:
@@ -84,7 +139,9 @@ The scheduler follows a modular architecture with these core components:
 3. **InMemory Implementation** - Non-persistent storage for testing/development
 4. **MongoDB Implementation** - Persistent storage for production
 5. **Retry Mechanism** - Configurable retry strategies with backoff
-6. **Leader Election** - Distributed coordination for multiple instances (in-memory only)
+6. **Leader Election** - Distributed coordination for multiple instances
+   - InMemory - Local coordination
+   - MongoDB - Distributed coordination
 
 ## Usage
 
