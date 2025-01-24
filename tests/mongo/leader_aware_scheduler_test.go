@@ -34,7 +34,7 @@ func TestLeaderAwareTaskScheduler_HappyPath(t *testing.T) {
 	client := createMongoClient(t, connStr)
 	
 	// Create first leader-aware scheduler
-	leaderElection1 := shared.Must(mongo_leader_election.NewMongoLeaderElection("instance-1", client, "testdb"))
+	leaderElection1 := shared.Must(mongo_leader_election.NewDefaultMongoLeaderElection("instance-1", client, "testdb"))
 	scheduler1 := mongo_scheduler.NewMongoTaskScheduler(client, "testdb")
 	las := leader_scheduler.NewLeaderAwareTaskScheduler(scheduler1, leaderElection1)
 
@@ -86,12 +86,12 @@ func TestLeaderAwareTaskScheduler_LeaderElectionBehavior(t *testing.T) {
 	client := createMongoClient(t, connStr)
 	
 	// Create first leader-aware scheduler
-	leaderElection1 := shared.Must(mongo_leader_election.NewMongoLeaderElection("instance-1", client, "testdb"))
+	leaderElection1 := shared.Must(mongo_leader_election.NewDefaultMongoLeaderElection("instance-1", client, "testdb"))
 	scheduler1 := mongo_scheduler.NewMongoTaskScheduler(client, "testdb")
 	las1 := leader_scheduler.NewLeaderAwareTaskScheduler(scheduler1, leaderElection1)
 	
 	// Create second scheduler instance
-	leaderElection2 := shared.Must(mongo_leader_election.NewMongoLeaderElection("instance-1", client, "testdb"))
+	leaderElection2 := shared.Must(mongo_leader_election.NewDefaultMongoLeaderElection("instance-1", client, "testdb"))
 	scheduler2 := mongo_scheduler.NewMongoTaskScheduler(client, "testdb")
 	las2 := leader_scheduler.NewLeaderAwareTaskScheduler(scheduler2, leaderElection2)
 	

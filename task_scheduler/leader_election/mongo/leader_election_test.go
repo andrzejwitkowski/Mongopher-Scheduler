@@ -21,7 +21,7 @@ func TestMongoLeaderElection_HappyPath(t *testing.T) {
 	client, err := mongo.Connect(context.Background(), clientOptions)
 	assert.NoError(t, err)
 
-	le1, _ := NewMongoLeaderElection("instance-1", client, "testdb")
+	le1, _ := NewDefaultMongoLeaderElection("instance-1", client, "testdb")
 
 	// Become leader
 	isLeader, err := le1.ElectLeader(context.Background())
@@ -57,12 +57,12 @@ func TestMongoLeaderElection_Failover(t *testing.T) {
 	client, err := mongo.Connect(context.Background(), clientOptions)
 	assert.NoError(t, err)
 
-	le1, _ := NewMongoLeaderElection("instance-1", client, "testdb")
+	le1, _ := NewDefaultMongoLeaderElection("instance-1", client, "testdb")
 	isLeader, err := le1.ElectLeader(context.Background())
 	assert.NoError(t, err)
 	assert.True(t, isLeader)
 
-	le2, _ := NewMongoLeaderElection("instance-2", client, "testdb")
+	le2, _ := NewDefaultMongoLeaderElection("instance-2", client, "testdb")
 	
 	le1.Resign()
 
@@ -86,8 +86,8 @@ func TestMongoLeaderElection_Concurrent(t *testing.T) {
 	client, err := mongo.Connect(context.Background(), clientOptions)
 	assert.NoError(t, err)
 
-	le1, _ := NewMongoLeaderElection("instance-1", client, "testdb")
-	le2, _ := NewMongoLeaderElection("instance-2", client, "testdb")
+	le1, _ := NewDefaultMongoLeaderElection("instance-1", client, "testdb")
+	le2, _ := NewDefaultMongoLeaderElection("instance-2", client, "testdb")
 
 	// Use a barrier to ensure both elections start at the same time
 	var startBarrier, endBarrier sync.WaitGroup
