@@ -2,6 +2,7 @@ package leader_election
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
@@ -25,7 +26,29 @@ type MongoLeaderElection struct {
 	leaderTTL    time.Duration
 }
 
-func NewMongoLeaderElection(instanceID string, client *mongo.Client, database string) (*MongoLeaderElection, error) {
+type LeaderInfo struct {
+	InstanceID string `bson:"instance_id"`
+	LastSeen   time.Time `bson:"last_seen"`
+}
+
+func NewDefaultMongoLeaderElection(instanceID string, client *mongo.Client, database string) (*MongoLeaderElection, error) {
+	return NewMongoLeaderElection(instanceID, client, database, 30*time.Second)
+}
+
+func NewMongoLeaderElection(instanceID string, client *mongo.Client, database string, leaderTTL time.Duration) (*MongoLeaderElection, error) {
+	if leaderTTL <= 0 {
+		return nil, fmt.Errorf("leaderTTL must be greater than 0")
+	}
+	if instanceID == "" {
+		return nil, fmt.Errorf("instanceID cannot be empty")
+	}
+	if client == nil {
+		return nil, fmt.Errorf("client cannot be nil")
+	}
+	if database == "" {
+		return nil, fmt.Errorf("database cannot be empty")
+	}
+
 	mle := &MongoLeaderElection{
 		instanceID:   instanceID,
 		client:       client,
@@ -33,17 +56,17 @@ func NewMongoLeaderElection(instanceID string, client *mongo.Client, database st
 		collection:   "leader_election",
 		timeProvider: shared.DefaultTimeProvider(),
 		refreshDone:  make(chan struct{}),
-		leaderTTL:    30 * time.Second,
+		leaderTTL:    leaderTTL,
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-    defer cancel()
-    
-    if err := mle.ensureIndexes(ctx); err != nil {
-        return nil, err
-    }
-    
-    return mle, nil
+	defer cancel()
+	
+	if err := mle.ensureIndexes(ctx); err != nil {
+		return nil, fmt.Errorf("failed to ensure indexes: %w", err)
+	}
+	
+	return mle, nil
 }
 
 func (mle *MongoLeaderElection) ElectLeader(ctx context.Context) (bool, error) {
@@ -64,35 +87,43 @@ func (mle *MongoLeaderElection) ElectLeader(ctx context.Context) (bool, error) {
     if err != nil {
         // If document already exists, try to take over leadership
         if mongo.IsDuplicateKeyError(err) {
-            // Try to update existing document if leader is expired
-            filter := bson.M{
-                "leader_key": "singleton",
-                "last_seen": bson.M{"$lt": ttlThreshold},
-            }
-
-            update := bson.M{
-                "$set": bson.M{
-                    "instance_id": mle.instanceID,
-                    "last_seen":   now,
-                },
-            }
-
-            result, err := collection.UpdateOne(ctx, filter, update)
-            if err != nil {
-                return false, err
-            }
-
-            // If we modified a document, we became the leader
-            if result.ModifiedCount > 0 {
-                mle.isLeader = true
-                ctx, cancel := context.WithCancel(ctx)
-                mle.cancelFunc = cancel
-                go mle.refreshLeadership(ctx)
-                return true, nil
-            }
-
-            // If we didn't modify any document, someone else is the leader
-            return false, nil
+        	// First check if current leader is expired
+        	currentLeader, err := mle.getCurrentLeader(ctx)
+        	if err != nil && err != mongo.ErrNoDocuments {
+        		return false, err
+        	}
+       
+        	// If there's no current leader or it's expired, try to take over
+        	if err == mongo.ErrNoDocuments || time.Since(currentLeader.LastSeen) >= mle.leaderTTL {
+        		filter := bson.M{
+        			"leader_key": "singleton",
+        			"last_seen": bson.M{"$lt": ttlThreshold},
+        		}
+       
+        		update := bson.M{
+        			"$set": bson.M{
+        				"instance_id": mle.instanceID,
+        				"last_seen":   now,
+        			},
+        		}
+       
+        		result, err := collection.UpdateOne(ctx, filter, update)
+        		if err != nil {
+        			return false, err
+        		}
+       
+        		// If we modified a document, we became the leader
+        		if result.ModifiedCount > 0 {
+        			mle.isLeader = true
+        			ctx, cancel := context.WithCancel(ctx)
+        			mle.cancelFunc = cancel
+        			go mle.refreshLeadership(ctx)
+        			return true, nil
+        		}
+        	}
+       
+        	// If we didn't modify any document, someone else is the leader
+        	return false, nil
         }
         return false, err
     }
@@ -116,11 +147,14 @@ func (mle *MongoLeaderElection) ensureIndexes(ctx context.Context) error {
         return err
     }
 
+    // Create TTL index on last_seen field
     _, err = collection.Indexes().CreateOne(ctx, mongo.IndexModel{
         Keys: bson.D{
             {Key: "last_seen", Value: 1},
         },
-        Options: options.Index().SetBackground(true),
+        Options: options.Index().
+            SetExpireAfterSeconds(int32(mle.leaderTTL.Seconds())).
+            SetBackground(true),
     })
     return err
 }
@@ -147,10 +181,24 @@ func (mle *MongoLeaderElection) IsLeader(ctx context.Context) (bool, error) {
 		return false, err
 	}
 
-	if leader.InstanceID == mle.instanceID && time.Since(leader.LastSeen) < mle.leaderTTL {
+	// If we can't find the leader document, we're not the leader
+	if err == mongo.ErrNoDocuments {
+		mle.isLeader = false
+		return false, nil
+	}
+
+	// If we found a leader document but it's expired, we're not the leader
+	if time.Since(leader.LastSeen) >= mle.leaderTTL {
+		mle.isLeader = false
+		return false, nil
+	}
+
+	// If we're the leader in the document, return true
+	if leader.InstanceID == mle.instanceID {
 		return true, nil
 	}
 
+	// Someone else is the leader
 	mle.isLeader = false
 	return false, nil
 }
@@ -210,6 +258,18 @@ func (mle *MongoLeaderElection) refreshLeadership(ctx context.Context) {
 			return
 		}
 	}
+}
+
+func (mle *MongoLeaderElection) getCurrentLeader(ctx context.Context) (*LeaderInfo, error) {
+    collection := mle.client.Database(mle.database).Collection(mle.collection)
+    
+    var leader LeaderInfo
+    filter := bson.M{"leader_key": "singleton"}
+    err := collection.FindOne(ctx, filter).Decode(&leader)
+    if err != nil {
+        return nil, err
+    }
+    return &leader, nil
 }
 
 func (mle *MongoLeaderElection) updateLeaderInfo(ctx context.Context) error {
